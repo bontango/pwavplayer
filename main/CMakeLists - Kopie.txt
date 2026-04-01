@@ -1,0 +1,6 @@
+idf_component_register(SRCS "wavplayer.c" "cserial.c" "pevent.c" "fupdate.c" "encevW11.c" "encevG80.c"
+                       INCLUDE_DIRS "."
+                       REQUIRES fatfs esp_driver_gptimer esp_driver_sdspi esp_driver_uart app_update esp_app_format esp_driver_i2c
+                       )
+
+target_compile_definitions(${COMPONENT_LIB} PRIVATE ESP32_WROVER)
