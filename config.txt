@@ -1,6 +1,0 @@
-# Konfigurationen
-dac=12
-mix=div2
-evt=flat
-deb=12
-ser=none
