@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------
 //
-// GPIO events, binary encoded, Gottlieb 80 & 80A
-//
-// v0.2
+// GPIO events, binary encoded, Gottlieb 1/80/80A/80B
+// System 1 to be checked!
+// v0.3
 //
 //
 
@@ -45,7 +45,7 @@ static void EnableInterrupts() {
     gpio_intr_enable(GPIO_NUM_26);
     gpio_intr_enable(GPIO_NUM_25);
     gpio_intr_enable(GPIO_NUM_33);
-//    gpio_intr_enable(GPIO_NUM_32);
+//    gpio_intr_enable(GPIO_NUM_32); // no INT for sound 16
     intrdis = 0;
 }
 
@@ -54,7 +54,7 @@ static void DisableInterrupts() {
     gpio_intr_disable(GPIO_NUM_26);
     gpio_intr_disable(GPIO_NUM_25);
     gpio_intr_disable(GPIO_NUM_33);
-//    gpio_intr_disable(GPIO_NUM_32);
+//    gpio_intr_disable(GPIO_NUM_32); // no INT for sound 16
     intrdis = 1;
 }
 
@@ -64,7 +64,7 @@ static uint8_t ReadBinaryCode() {
     if (gpio_get_level(GPIO_NUM_26)) sbyte |= 0b00000010;
     if (gpio_get_level(GPIO_NUM_25)) sbyte |= 0b00000100;
     if (gpio_get_level(GPIO_NUM_33)) sbyte |= 0b00001000;
-//    if (gpio_get_level(GPIO_NUM_32)) sbyte |= 0b00010000; // MSBit
+    if (gpio_get_level(GPIO_NUM_32)) sbyte |= 0b00010000; // MSBit
     return sbyte;
 }
 
@@ -138,8 +138,8 @@ void EncEventG80(void *pvParameters) {
     ESP_ERROR_CHECK(gptimer_enable(gptimer));
 
 	// input bit A..E, Gottlieb binary encoded event
-    // interrupt negative edge
-    // any bit can cause an interrupt, same ISR for all
+    // interrupt positive edge
+    // only bit A..D can cause an interrupt, same ISR for all
     gpio_config_t io_conf = {0};
     io_conf.mode = GPIO_MODE_INPUT;
     io_conf.intr_type = GPIO_INTR_POSEDGE;
@@ -147,8 +147,8 @@ void EncEventG80(void *pvParameters) {
             (1ULL << GPIO_NUM_27)  // A (LSBit)
         |   (1ULL << GPIO_NUM_26)  // B
         |   (1ULL << GPIO_NUM_25)  // C
-        |   (1ULL << GPIO_NUM_33); // D
-//        |   (1ULL << GPIO_NUM_32); // E (MSBit)
+        |   (1ULL << GPIO_NUM_33)  // D
+        |   (1ULL << GPIO_NUM_32); // E (MSBit)
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
@@ -158,7 +158,7 @@ void EncEventG80(void *pvParameters) {
     gpio_isr_handler_add(GPIO_NUM_26, IsrEncoded, (void*)GPIO_NUM_26);
     gpio_isr_handler_add(GPIO_NUM_25, IsrEncoded, (void*)GPIO_NUM_25);
     gpio_isr_handler_add(GPIO_NUM_33, IsrEncoded, (void*)GPIO_NUM_33);
-//    gpio_isr_handler_add(GPIO_NUM_32, IsrEncoded, (void*)GPIO_NUM_32);
+//    gpio_isr_handler_add(GPIO_NUM_32, IsrEncoded, (void*)GPIO_NUM_32); // no INT for sound 16
     EnableInterrupts();
 
     while(1) {
