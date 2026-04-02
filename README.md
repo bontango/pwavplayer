@@ -10,8 +10,9 @@ Ein polyphoner WAV-Player für ESP32-Mikrocontroller, entwickelt für den Einsat
 
 - **Polyphonie**: Mehrere WAV-Dateien werden gleichzeitig abgespielt und in Echtzeit gemischt.
 - **SD-Karte**: WAV-Dateien und Konfiguration werden von einer FAT-formatierten SD-Karte gelesen.
-- **GPIO-Events**: Bis zu 10 Eingangspins lösen Soundwiedergaben aus (direkt oder binär-codiert für Williams System 11 / Gottlieb System 80).
+- **GPIO-Events**: Bis zu 10 Eingangspins lösen Soundwiedergaben aus (direkt oder binär-codiert für Williams System 11 / Gottlieb System 1/80/80A/80B).
 - **Serielle Steuerung**: Sounds können über UART oder I2C (Slave) ausgelöst werden.
+- **USB Config Editor**: Browser-basierter Editor (`webapp/`) zur Verwaltung der SD-Karte und Konfiguration über USB (Chrome/Edge).
 - **Dateiattribute**: Einzelne WAV-Dateien können als Loop, Hintergrundsound, Init-Sound oder mit Kill-Verhalten konfiguriert werden.
 - **Soundgruppen**: Mehrere Sounds können zu einer Gruppe zusammengefasst werden, aus der zufällig oder sequenziell ausgewählt wird.
 - **Firmware-Update**: Neue Firmware kann als `update.bin` auf der SD-Karte abgelegt und beim Bootvorgang automatisch eingespielt werden.
@@ -64,7 +65,7 @@ ser=uart
 | `flat` | 10 Eingangspins, jeder Pin löst Sound mit derselben Nummer aus (ab Rel. 0.9.2, mit Ruheperiode) |
 | `flat0` | Wie `flat`, ältere Variante ohne Ruheperiode (bis Rel. 0.9.1) |
 | `bw11` | Williams System 11 – binär codierter Sound-Bus |
-| `bg80` | Gottlieb System 80/80A – binär codierter Sound-Bus |
+| `bg80` | Gottlieb System 1/80/80A/80B – binär codierter Sound-Bus |
 
 Bei `flat` / `flat0`: Pin 1–10 lösen Sound-ID 1–10 aus. Eingänge sind Active-Low mit externem 10-kΩ-Pull-up.
 
@@ -169,3 +170,26 @@ update.bin
 ```
 
 Beim nächsten Bootvorgang prüft das Gerät ob die Datei vorhanden und gültig ist, spielt sie in die inaktive OTA-Partition ein und startet mit der neuen Version neu. Die Datei wird nach erfolgreichem Update nicht automatisch gelöscht.
+
+---
+
+## USB Config Editor
+
+Im Verzeichnis `webapp/` befindet sich `PWAVplayer_config_editor.html` – ein browserbasierter Editor für Chrome oder Edge (Desktop).
+
+### Funktionen
+
+- **Konfiguration**: `config.txt` bearbeiten, auf das Gerät hochladen oder herunterladen
+- **SD-Karte**: Dateiliste anzeigen (Name, Größe, Datum), Dateien herunterladen, umbenennen und löschen
+- **Firmware-Update**: Lokale `.bin`-Datei als `update.bin` auf die SD-Karte übertragen; vollständiges Flash-Utility über esptool-js (Browser-USB)
+- **Standardkonfiguration**: Vorgabe-`config.txt` von lisy.dev laden
+
+### Voraussetzungen
+
+- Chrome oder Edge (Desktop) – Web Serial API erforderlich
+- ESP32 per USB verbunden
+- Firmware läuft (`UsbSerial`-Task aktiv)
+
+### Protokoll
+
+Die Kommunikation erfolgt über `UART_NUM_0` (115200 Baud) mit einem frame-basierten Textprotokoll. Details siehe `webapp/API.md`.

@@ -1,7 +1,7 @@
 # PWAVplayer USB Serial API
 
-This document defines the USB serial API that must be implemented in the pwavplayer firmware
-(`main/cserial.c` or a new `main/usbapi.c`) to support the PWAVplayer Config Editor web app.
+This document defines the USB serial API implemented in `main/usbserial.c` to support the
+PWAVplayer Config Editor web app (`webapp/PWAVplayer_config_editor.html`).
 
 The editor communicates via the **Web Serial API** (Chrome/Edge) using a frame-based text protocol
 over UART (115200 baud by default).
@@ -132,16 +132,20 @@ Device TX:  OK:FILE_SAVED\r\n
 ```
 Editor TX:  FILE:LIST\r\n
 Device TX:  DATA:BEGIN=<size>\r\n
-            {"files":[{"name":"0001.wav","size":44100},{"name":"config.txt","size":64}]}\r\n
+            {"files":[{"name":"0001.wav","size":44100,"mtime":1743600000},{"name":"config.txt","size":64,"mtime":1743600060}]}\r\n
             DATA:END\r\n
 ```
 
 **Firmware implementation:**
 - Open SD card root directory
 - Iterate all files (skip subdirectories)
-- Build JSON array with `name` and `size` (bytes) for each file
+- Use `stat()` to obtain `st_size` and `st_mtime` (Unix seconds) for each file
+- Build JSON array with `name`, `size` (bytes), and `mtime` (Unix timestamp) for each file
 - Send as DATA text frame
 - If SD card not mounted: `ERR:SD_NOT_MOUNTED\r\n`
+
+**Note:** `mtime` is only meaningful if the device clock has been set via `SET:TIME` before
+the files were written. The editor sends `SET:TIME` automatically after connecting.
 
 **Fallback format** (if JSON is inconvenient): one file per line, tab-separated name and size:
 ```
@@ -187,7 +191,25 @@ Device TX:  OK:FILE_RENAMED\r\n
 
 ---
 
-### 7. REBOOT
+### 7. SET:TIME=\<unix_seconds\>
+
+**Purpose:** Synchronise the ESP32 system clock so that file uploads receive correct FAT
+timestamps. The editor sends this command automatically after a successful handshake.
+
+```
+Editor TX:  SET:TIME=1743600000\r\n
+Device TX:  OK:TIME_SET\r\n
+```
+
+**Firmware implementation:**
+- Parse the decimal Unix timestamp from the argument
+- Call `settimeofday()` with the value
+- Respond `OK:TIME_SET\r\n`
+- If the value is ≤ 0, do nothing but still respond `OK:TIME_SET\r\n`
+
+---
+
+### 8. REBOOT
 
 **Purpose:** Trigger a software reset of the ESP32.
 
@@ -205,50 +227,32 @@ Device TX:  OK:REBOOTING\r\n
 
 ## Implementation Notes
 
-### Adding to `main/cserial.c`
+### Implementation in `main/usbserial.c`
 
-The current UART handler (`SerialUART` task) only processes `p <num>` play commands.
-Extend the command parser to handle the new commands:
-
-```c
-// In the UART receive loop, after reading a line:
-if (strncmp(line, "FILE:DOWNLOAD=", 14) == 0) {
-    handle_file_download(line + 14);
-} else if (strncmp(line, "FILE:UPLOAD=", 12) == 0) {
-    handle_file_upload(line + 12);
-} else if (strcmp(line, "FILE:LIST") == 0) {
-    handle_file_list();
-} else if (strcmp(line, "REBOOT") == 0) {
-    uart_write_bytes(UART_NUM_2, "OK:REBOOTING\r\n", 14);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    esp_restart();
-} else if (line[0] == 0x55) {
-    uart_write_bytes(UART_NUM_2, "OK:READY\r\n", 10);
-}
-```
+The API is fully implemented in `main/usbserial.c` as the `UsbSerial` FreeRTOS task.
+The task runs on `UART_NUM_0` (the ESP32 USB-CDC / JTAG UART) at 115200 baud and is
+independent of the sound-command serial interface (`cserial.c`).
 
 ### SD Card Mount Point
 
-The SD card is mounted in `main/main.c`. Use the same mount point (e.g. `/sdcard`) for all
-file operations in the API handlers.
+The SD card is mounted in `main/main.c`. The mount point is exported as `mount_point[]`
+from `wavplayer.c` and used by all `cmdapi_*` functions in `cmdapi.c`.
 
 ### Task/Buffer Considerations
 
 - File transfers can be large (WAV files up to several MB)
-- Use streaming reads/writes rather than loading entire files into RAM
-- The UART task stack may need to be increased for large transfers
-- Consider using a dedicated USB API task on Core 1 if UART task stack is insufficient
+- `usbserial.c` uses streaming reads/writes — files are never fully loaded into RAM
+- RX buffer: 4096 bytes; line buffer: 256 bytes; base64 decode buffer: 200 bytes
 
 ### UART Port
 
-Current config: `UART_NUM_2`, GPIO 22 (TX), GPIO 21 (RX), 115200 baud.
-See `main/cserial.c` and `main/pgpio.h` for pin definitions.
+Current config: `UART_NUM_0`, 115200 baud (no dedicated TX/RX GPIOs — uses the built-in
+USB serial converter). See `usbserial.c` constants `USB_UART_PORT` and `USB_BAUD_RATE`.
 
 ### Enabling the API
 
-The USB serial API is only available when `ser=uart` is set in `config.txt`.
-To make the API available regardless of `ser` setting, consider adding a dedicated
-USB-serial task that always runs (separate from the I2C/UART sound command interface).
+The `UsbSerial` task is started unconditionally from `main/main.c` alongside the other
+tasks, regardless of the `ser=` setting in `config.txt`.
 
 ---
 
@@ -262,4 +266,5 @@ USB-serial task that always runs (separate from the I2C/UART sound command inter
 | `FILE:LIST` | Editor→Device | — | DATA frame (JSON) |
 | `FILE:DELETE=<name>` | Editor→Device | — | `OK:FILE_DELETED` |
 | `FILE:RENAME=<old>,<new>` | Editor→Device | — | `OK:FILE_RENAMED` |
+| `SET:TIME=<unix_seconds>` | Editor→Device | — | `OK:TIME_SET` |
 | `REBOOT` | Editor→Device | — | `OK:REBOOTING` |
