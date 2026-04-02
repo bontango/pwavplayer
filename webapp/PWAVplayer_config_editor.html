@@ -459,6 +459,8 @@ async function usbConnect() {
     setStatus('connected');
     setDeviceButtons(true);
     showToast('Connected to PWAVplayer', 'success');
+    // Sync device clock so file uploads get correct timestamps
+    try { await usbSendCmd('SET:TIME=' + Math.floor(Date.now() / 1000), 3000); } catch(_) {}
   } catch (e) {
     if (e.name !== 'NotSelectedError') {
       usbLog('Connection error: ' + e.message, 'err');
@@ -786,16 +788,18 @@ function renderFileList(container, files) {
   if (!files || !files.length) { container.textContent = 'No files on SD card.'; return; }
   const tbl = document.createElement('table');
   tbl.className = 'table table-sm table-hover mb-0';
-  tbl.innerHTML = '<thead><tr><th>Filename</th><th>Size</th><th></th></tr></thead>';
+  tbl.innerHTML = '<thead><tr><th>Filename</th><th>Size</th><th>Date</th><th></th></tr></thead>';
   const tb = document.createElement('tbody');
   for (const f of files) {
-    const name = typeof f === 'string' ? f : f.name;
-    const size = typeof f === 'string' ? '' : formatSize(f.size);
+    const name  = typeof f === 'string' ? f : f.name;
+    const size  = typeof f === 'string' ? '' : formatSize(f.size);
+    const date  = (typeof f === 'object' && f.mtime) ? formatDate(f.mtime) : '';
     const nameQ = escHtml(name);
     const tr = document.createElement('tr');
     tr.innerHTML =
       `<td class="font-monospace small">${nameQ}</td>` +
       `<td class="small text-muted">${escHtml(size)}</td>` +
+      `<td class="small text-muted">${escHtml(date)}</td>` +
       `<td class="d-flex gap-1">` +
         `<button class="btn btn-outline-secondary btn-sm" onclick="downloadSdFile('${nameQ}')">Download</button>` +
         `<button class="btn btn-outline-secondary btn-sm" onclick="renameFile('${nameQ}')">Rename</button>` +
@@ -868,6 +872,16 @@ function formatSize(b) {
   if (n < 1024) return n + ' B';
   if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
   return (n / 1048576).toFixed(2) + ' MB';
+}
+
+function formatDate(unix) {
+  if (!unix || unix <= 0) return '';
+  const d = new Date(unix * 1000);
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + ' ' +
+    String(d.getHours()).padStart(2, '0') + ':' +
+    String(d.getMinutes()).padStart(2, '0');
 }
 
 // ─── Update Tab ───────────────────────────────────────────────────────────────

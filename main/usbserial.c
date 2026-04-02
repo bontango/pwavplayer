@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/stream_buffer.h"
@@ -359,6 +360,16 @@ void UsbSerial(void *pvParameters) {
                     } else {
                         usb_tx("ERR:INVALID_ARGS\r\n");
                     }
+                }
+                // ---- SET:TIME=<unix_seconds> ----
+                else if (strncmp(line, "SET:TIME=", 9) == 0) {
+                    long t = atol(line + 9);
+                    if (t > 0) {
+                        struct timeval tv = { .tv_sec = (time_t)t, .tv_usec = 0 };
+                        settimeofday(&tv, NULL);
+                        ESP_LOGI(TAG, "System time set to %ld", t);
+                    }
+                    usb_tx("OK:TIME_SET\r\n");
                 }
                 // ---- REBOOT ----
                 else if (strcmp(line, "REBOOT") == 0) {

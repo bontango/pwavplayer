@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include "esp_system.h"
 #include "esp_log.h"
 #include "cmdapi.h"
@@ -61,15 +62,19 @@ esp_err_t cmdapi_file_list_json(char **json_out) {
     while ((e = readdir(d)) != NULL) {
         if (e->d_type != DT_REG) continue;  // skip subdirectories
 
-        // Get file size
+        // Get file size and mtime via stat()
         char fpath[512];
         snprintf(fpath, sizeof(fpath), "%s/%s", mount_point, e->d_name);
-        FILE *f = fopen(fpath, "r");
+        struct stat st;
         long fsz = 0;
-        if (f) { fseek(f, 0, SEEK_END); fsz = ftell(f); fclose(f); }
+        long fmtime = 0;
+        if (stat(fpath, &st) == 0) {
+            fsz    = (long)st.st_size;
+            fmtime = (long)st.st_mtime;
+        }
 
         // Ensure buffer has space for this entry
-        size_t need = (size_t)pos + strlen(e->d_name) + 40;
+        size_t need = (size_t)pos + strlen(e->d_name) + 64;
         if (need >= bufsz) {
             bufsz = need + 256;
             char *nb = realloc(buf, bufsz);
@@ -79,7 +84,7 @@ esp_err_t cmdapi_file_list_json(char **json_out) {
 
         if (!first) buf[pos++] = ',';
         pos += snprintf(buf + pos, bufsz - pos,
-                        "{\"name\":\"%s\",\"size\":%ld}", e->d_name, fsz);
+                        "{\"name\":\"%s\",\"size\":%ld,\"mtime\":%ld}", e->d_name, fsz, fmtime);
         first = false;
     }
     closedir(d);
