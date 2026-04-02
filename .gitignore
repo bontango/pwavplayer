@@ -3,3 +3,6 @@ managed_components/
 sdkconfig.old
 dependencies.lock
 .vscode/
+.claude/
+CLAUDE.md
+config.txt

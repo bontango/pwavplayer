@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWAVplayer Config Editor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    /* ── USB Console (dark terminal) ──────────────────────────────────── */
+    #usb-wrapper {
+      background: #080c0a; color: #c8f0d8;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      border-radius: 4px; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    #usb-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 8px 14px; border-bottom: 1px solid #1a2e20;
+      background: #0d1410; flex-shrink: 0; flex-wrap: wrap;
+    }
+    #usb-header button, #usb-header select {
+      background: #0a1a10; color: #00ff88; border: 1px solid #1a2e20;
+      font-family: inherit; font-size: 12px;
+      padding: 4px 10px; cursor: pointer; border-radius: 3px;
+      transition: all 0.2s;
+    }
+    #usb-header button:hover { border-color: #00ff88; background: rgba(0,255,136,0.12); }
+    #usb-header select { color: #c8f0d8; }
+    #usb-header select option { background: #0a1a10; }
+    .usb-btn-primary {
+      background: rgba(0,255,136,0.10) !important;
+      border-color: #00ff88 !important; color: #00ff88 !important; font-weight: bold;
+    }
+    .usb-btn-primary:hover { background: rgba(0,255,136,0.22) !important; }
+    .usb-btn-primary.usb-active {
+      background: rgba(255,68,68,0.15) !important;
+      border-color: #ff4444 !important; color: #ff4444 !important;
+    }
+    .usb-btn-danger:hover {
+      border-color: #ff4444 !important; color: #ff4444 !important;
+      background: rgba(255,68,68,0.1) !important;
+    }
+    #usb-console {
+      flex: none; overflow-y: auto; padding: 8px 14px;
+      font-size: 12px; line-height: 1.7; height: 220px;
+      scrollbar-width: thin; scrollbar-color: #2a6640 #0d1410;
+    }
+    #usb-console::-webkit-scrollbar { width: 5px; }
+    #usb-console::-webkit-scrollbar-track { background: #0d1410; }
+    #usb-console::-webkit-scrollbar-thumb { background: #2a6640; border-radius: 3px; }
+    .log-line { display: flex; gap: 8px; }
+    .log-ts  { color: #2a3e30; font-size: 11px; flex-shrink: 0; min-width: 64px; margin-top: 1px; }
+    .log-rx  { color: #33ffaa; }
+    .log-sys { color: #4a6050; font-style: italic; }
+    .log-err { color: #ff6666; }
+    .log-tx  { color: #88aaff; }
+
+    /* ── Status dot ──────────────────────────────────────────────────── */
+    .usb-status-dot {
+      display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+      background: #ff4444; flex-shrink: 0; transition: all 0.3s;
+    }
+    .usb-status-dot.connected    { background: #00ff88; box-shadow: 0 0 7px #00ff88; animation: usbPulse 2s infinite; }
+    .usb-status-dot.handshaking  { background: #ffaa00; box-shadow: 0 0 7px #ffaa00; animation: usbPulse 0.5s infinite; }
+    #usb-status-text { font-size: 12px; color: #556; }
+    #usb-status-text.connected   { color: #00cc66; }
+    #usb-status-text.handshaking { color: #ffaa00; }
+    @keyframes usbPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* ── Flash log ──────────────────────────────────────────────────── */
+    #usbFlashLog {
+      background: #111; color: #00ff88;
+      font-family: 'Courier New', monospace; font-size: 12px;
+      max-height: 200px; overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    /* ── File table ─────────────────────────────────────────────────── */
+    #files-container table { font-size: 13px; }
+
+    /* ── Config preview ─────────────────────────────────────────────── */
+    #config-preview { background: #f8f9fa; color: #0d6efd; font-size: 13px; }
+
+    /* ── addr row conditional display ──────────────────────────────── */
+    .field-hidden { display: none !important; }
+  </style>
+</head>
+<body class="bg-light">
+
+<!-- ── Toast ─────────────────────────────────────────────────────────── -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:9999">
+  <div id="mainToast" class="toast align-items-center text-white border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMsg"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="fileInput" accept=".txt,.cfg" style="display:none">
+
+<!-- ── Navbar ──────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-dark bg-dark px-3 py-2">
+  <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
+    <small class="text-secondary fw-normal">v1.0</small>
+  </span>
+  <span id="currentFileName" class="text-secondary text-truncate mx-auto"
+        style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="btn btn-outline-light btn-sm"      id="btnOpen">&#128194; Open</button>
+    <button class="btn btn-outline-light btn-sm"      id="btnSave">&#128190; Save</button>
+    <button class="btn btn-outline-secondary btn-sm"  id="btnSaveAs">&#128190; Save As&hellip;</button>
+    <button class="btn btn-outline-warning btn-sm"    id="btnNew">&#10010; New Config</button>
+  </div>
+</nav>
+
+<!-- ── Main content ───────────────────────────────────────────────────── -->
+<div class="container-fluid mt-3 px-3">
+
+  <!-- Tab bar -->
+  <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <a class="nav-link active" data-bs-toggle="tab" href="#tabDevice" role="tab">Device</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" data-bs-toggle="tab" href="#tabGeneral" role="tab">General</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" data-bs-toggle="tab" href="#tabUpdate" role="tab">Update</a>
+    </li>
+  </ul>
+
+  <div class="tab-content bg-white border border-top-0 rounded-bottom p-3">
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TAB: DEVICE
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="tabDevice" role="tabpanel">
+
+      <div class="row g-3">
+
+        <!-- USB Connection -->
+        <div class="col-12">
+          <h6>USB Connection</h6>
+          <div id="usb-wrapper" class="border rounded">
+            <div id="usb-header">
+              <span class="usb-status-dot" id="usb-status-dot"></span>
+              <span id="usb-status-text">Disconnected</span>
+              <button id="btn-connect" class="usb-btn-primary" onclick="usbConnect()">Connect USB</button>
+              <button id="btn-disconnect" class="usb-btn-danger" onclick="usbDisconnect()" disabled>Disconnect</button>
+              <label style="font-size:12px; color:#4a6050; display:flex; align-items:center; gap:6px;">
+                Baud:
+                <select id="usb-baud">
+                  <option value="115200" selected>115200</option>
+                  <option value="57600">57600</option>
+                  <option value="9600">9600</option>
+                </select>
+              </label>
+            </div>
+            <div id="usb-console"></div>
+          </div>
+        </div>
+
+        <!-- Config Transfer -->
+        <div class="col-12">
+          <h6>Config Transfer</h6>
+          <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-success btn-sm"           id="btn-ul-config"  onclick="uploadConfig()"           disabled>&#8593; Upload Config to Device</button>
+            <button class="btn btn-outline-success btn-sm"   id="btn-dl-config"  onclick="downloadConfig()"         disabled>&#8595; Download Config from Device</button>
+            <button class="btn btn-outline-secondary btn-sm"                     onclick="downloadDefaultConfig()">&#8681; Download default config</button>
+          </div>
+        </div>
+
+        <!-- Device Control -->
+        <div class="col-12">
+          <h6>Device Control</h6>
+          <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-warning btn-sm" id="btn-reboot" onclick="rebootDevice()" disabled>&#9654; Reboot Device</button>
+          </div>
+        </div>
+
+        <!-- Upload File -->
+        <div class="col-12">
+          <h6>Upload File to Device</h6>
+          <input type="file" id="upload-file-input" style="display:none" onchange="uploadFileToDevice(this.files[0])">
+          <div class="d-flex gap-2 flex-wrap align-items-center">
+            <button class="btn btn-outline-secondary btn-sm" id="btn-upload-file"
+                    onclick="document.getElementById('upload-file-input').click()" disabled>
+              &#8593; Choose &amp; Upload File
+            </button>
+            <span id="upload-status" class="small text-muted"></span>
+          </div>
+          <div class="progress mt-2 d-none" id="upload-progress-wrap" style="height:6px;">
+            <div class="progress-bar" id="upload-progress-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- SD Card Files -->
+        <div class="col-12">
+          <h6>SD Card Files</h6>
+          <div class="mb-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btn-list-files" onclick="listFiles()" disabled>
+              &#8635; Refresh File List
+            </button>
+          </div>
+          <div id="files-container" class="small text-muted">Connect to device and click Refresh.</div>
+        </div>
+
+      </div>
+    </div><!-- /tabDevice -->
+
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TAB: GENERAL
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tabGeneral" role="tabpanel">
+
+      <h5 class="mb-3">config.txt Settings</h5>
+
+      <div class="row g-3">
+        <div class="col-12">
+
+          <!-- dac -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">dac</label>
+            <div class="col-sm-8">
+              <select class="form-select form-select-sm" id="cfg-dac">
+                <option value="12">12 — 12-bit DAC output</option>
+                <option value="16">16 — 16-bit DAC output</option>
+              </select>
+              <div class="form-text">DAC resolution for audio output</div>
+            </div>
+          </div>
+
+          <!-- mix -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">mix</label>
+            <div class="col-sm-8">
+              <select class="form-select form-select-sm" id="cfg-mix">
+                <option value="sum">sum — Simple sum of samples</option>
+                <option value="div2" selected>div2 — Divide by 2 (prevents clipping)</option>
+                <option value="sqrt">sqrt — Square root (loudness compensation)</option>
+              </select>
+              <div class="form-text">Algorithm for mixing multiple audio tracks</div>
+            </div>
+          </div>
+
+          <!-- evt -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">evt</label>
+            <div class="col-sm-8">
+              <select class="form-select form-select-sm" id="cfg-evt">
+                <option value="none">none — No GPIO events</option>
+                <option value="flat" selected>flat — Direct pin→sound (new wiring)</option>
+                <option value="flat0">flat0 — Direct pin→sound (old wiring)</option>
+                <option value="bw11">bw11 — Williams System 11 encoded</option>
+                <option value="bg80">bg80 — Gottlieb System 80/80A encoded</option>
+              </select>
+              <div class="form-text">GPIO event / input mode</div>
+            </div>
+          </div>
+
+          <!-- deb -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">deb</label>
+            <div class="col-sm-8">
+              <input type="number" class="form-control form-control-sm" id="cfg-deb"
+                     value="5" min="0" max="500" style="max-width:120px;">
+              <div class="form-text">GPIO debounce time in milliseconds</div>
+            </div>
+          </div>
+
+          <!-- rpd -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">rpd</label>
+            <div class="col-sm-8">
+              <input type="number" class="form-control form-control-sm" id="cfg-rpd"
+                     value="60" min="0" max="10000" style="max-width:120px;">
+              <div class="form-text">Rest period in milliseconds</div>
+            </div>
+          </div>
+
+          <!-- ser -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">ser</label>
+            <div class="col-sm-8">
+              <select class="form-select form-select-sm" id="cfg-ser" onchange="onSerChange()">
+                <option value="none" selected>none — Disabled</option>
+                <option value="uart">uart — UART serial commands</option>
+                <option value="i2c">i2c — I2C slave interface</option>
+              </select>
+              <div class="form-text">Serial command interface type</div>
+            </div>
+          </div>
+
+          <!-- addr (only when ser=i2c) -->
+          <div class="mb-3 row field-hidden" id="row-addr">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">addr</label>
+            <div class="col-sm-8">
+              <input type="text" class="form-control form-control-sm" id="cfg-addr"
+                     value="0x66" placeholder="0x66" style="max-width:120px;">
+              <div class="form-text">I2C slave address (hex), e.g. 0x08</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div><!-- /tabGeneral -->
+
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TAB: UPDATE
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tabUpdate" role="tabpanel">
+
+      <h5 class="mb-3">Update Firmware</h5>
+      <div class="row g-3">
+
+        <!-- Section 1: Upload local .bin (via USB → SD card as update.bin) -->
+        <div class="col-12" id="localUploadSection">
+          <h6>Upload local firmware file <small class="text-muted fw-normal">(USB mode — writes update.bin to SD card)</small></h6>
+          <div class="d-flex gap-2 flex-wrap align-items-center">
+            <input type="file" accept=".bin" class="form-control form-control-sm"
+                   id="clockUpdateInput" style="max-width:350px">
+            <button class="btn btn-warning btn-sm" id="btnClockUpdate">Update &amp; Reboot</button>
+            <span class="small text-muted" id="clockUpdateStatus"></span>
+          </div>
+        </div>
+
+        <!-- Section 2: Select from lisy.dev server -->
+        <div class="col-12"><hr class="my-1">
+          <h6 class="mt-2">Or select from lisy.dev</h6>
+          <div class="d-flex gap-2 flex-wrap align-items-center">
+            <button class="btn btn-outline-secondary btn-sm" id="btnFetchServerFw">Fetch versions</button>
+            <select class="form-select form-select-sm d-none" id="serverFwSelect" style="max-width:300px">
+              <option value="">&#8212; select &#8212;</option>
+            </select>
+            <button class="btn btn-warning btn-sm d-none" id="btnInstallServerFw">Install selected</button>
+          </div>
+        </div>
+
+        <!-- Section 3: Full USB flash via esptool-js -->
+        <div class="col-12"><hr class="my-1">
+          <h6 class="mt-2">Flash via USB (full installation) <small class="text-muted fw-normal">(USB mode only)</small></h6>
+          <p class="small text-muted mb-2">
+            Writes bootloader, firmware, partition table and OTA data directly via USB to the ESP32.
+            No Wi-Fi connection required. Chrome/Edge only.
+          </p>
+          <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+            <button class="btn btn-danger btn-sm" id="btnUsbFlash">&#x26A1; Flash via USB</button>
+            <span class="small text-muted" id="usbFlashStatus"></span>
+          </div>
+          <div id="usbFlashLog" class="d-none border rounded p-2" style="background:#111;color:#00ff88;max-height:200px;overflow-y:auto;white-space:pre-wrap;font-family:'Courier New',monospace;font-size:12px;"></div>
+        </div>
+
+      </div>
+    </div><!-- /tabUpdate -->
+
+  </div><!-- /tab-content -->
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+'use strict';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const BIN_BASE     = 'https://lisy.dev/swrep/soundboards/GOSOWAV/bin/';
+const ESPTOOL_BASE = 'https://lisy.dev/swrep/soundboards/GOSOWAV/esptool/';
+
+const FLASH_FILES = [
+  { name: 'bootloader.bin',       address: 0x1000 },
+  { name: 'partition-table.bin',  address: 0x8000 },
+  { name: 'ota_data_initial.bin', address: 0xd000 },
+  { name: 'pwavplayer.bin',       address: 0x10000 },
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let usb_port = null;
+let usb_reader = null;
+let usb_readActive = false;
+let usb_handshakeDone = false;
+let usb_bootBuffer = [];
+
+let wifiCmdResolve = null;
+
+let usbFrameResolve = null;
+let usbFrameBuffer  = null;
+let usbFrameType    = null;
+let usbFrameLineCount = 0;
+
+// Dedicated chunk-ACK tracking (avoids race with wifiCmdResolve)
+let _ackPending = 0;     // ACKs received but not yet consumed
+let _ackResolve = null;  // resolve callback when waiting for an ACK
+let _ackTimer   = null;  // timeout handle
+
+let isConnected = false;
+let configLoaded = false;
+
+// File System Access API handle (if available)
+let fsFileHandle = null;
+
+const USB_HANDSHAKE_BYTE = new Uint8Array([0x55]);
+
+// ─── Bootstrap Toast helper ───────────────────────────────────────────────────
+
+function showToast(msg, type = 'success') {
+  const colors = { success: 'bg-success', danger: 'bg-danger', warning: 'bg-warning text-dark', info: 'bg-info text-dark' };
+  const el = document.getElementById('mainToast');
+  el.className = 'toast align-items-center text-white border-0 ' + (colors[type] || colors.success);
+  document.getElementById('toastMsg').textContent = msg;
+  bootstrap.Toast.getOrCreateInstance(el, { delay: 3500 }).show();
+}
+
+// ─── USB Logging ──────────────────────────────────────────────────────────────
+
+function usbLog(msg, cls) {
+  const con = document.getElementById('usb-console');
+  const ts  = new Date().toTimeString().slice(0, 8);
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-${cls || 'rx'}">${escHtml(msg)}</span>`;
+  con.appendChild(line);
+  con.scrollTop = con.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── USB Connection ───────────────────────────────────────────────────────────
+
+async function usbConnect() {
+  if (!('serial' in navigator)) {
+    showToast('Web Serial API not available — Chrome or Edge (Desktop) required.', 'danger');
+    return;
+  }
+  try {
+    usb_port = await navigator.serial.requestPort();
+    const baud = parseInt(document.getElementById('usb-baud').value);
+    await usb_port.open({ baudRate: baud });
+    usb_handshakeDone = false;
+    usb_bootBuffer = [];
+    usb_readActive = true;
+    setStatus('handshaking');
+    usbLog('Port opened @ ' + baud + ' baud', 'sys');
+
+    usbReadLoop();
+
+    usbLog('Sending handshake (0x55)…', 'sys');
+    await usbSleep(200);
+    await usbWriteRaw(USB_HANDSHAKE_BYTE);
+    const ok = await usbWaitForReady(8000);
+    usbLog(ok ? 'Handshake OK — OK:READY received' : 'No OK:READY — connecting anyway', 'sys');
+    usb_handshakeDone = true;
+    setStatus('connected');
+    setDeviceButtons(true);
+    showToast('Connected to PWAVplayer', 'success');
+  } catch (e) {
+    if (e.name !== 'NotSelectedError') {
+      usbLog('Connection error: ' + e.message, 'err');
+      showToast('Connection failed: ' + e.message, 'danger');
+    }
+    usb_port = null;
+    setStatus('disconnected');
+  }
+}
+
+async function usbDisconnect() {
+  usb_readActive = false;
+  try {
+    if (usb_reader) { await usb_reader.cancel(); usb_reader = null; }
+    if (usb_port)   { await usb_port.close();    usb_port   = null; }
+  } catch (e) {}
+  setStatus('disconnected');
+  setDeviceButtons(false);
+  usbLog('Disconnected', 'sys');
+}
+
+async function usbReadLoop() {
+  const decoder = new TextDecoder();
+  let buf = '';
+  while (usb_port && usb_port.readable && usb_readActive) {
+    try {
+      usb_reader = usb_port.readable.getReader();
+      while (usb_readActive) {
+        const { value, done } = await usb_reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, idx).replace(/\r$/, '').trim();
+          buf = buf.slice(idx + 1);
+          if (line) processIncomingLine(line);
+        }
+      }
+      usb_reader.releaseLock(); usb_reader = null;
+    } catch (e) {
+      if (usb_reader) { try { usb_reader.releaseLock(); } catch(_){} usb_reader = null; }
+      if (usb_readActive) usbLog('Read error: ' + e.message, 'err');
+      break;
+    }
+  }
+}
+
+function processIncomingLine(line) {
+  // TEXT frame
+  if (line.startsWith('DATA:BEGIN=') && !usbFrameType) {
+    usbFrameBuffer = ''; usbFrameType = 'text'; usbFrameLineCount = 0; return;
+  }
+  if (usbFrameType === 'text') {
+    if (line === 'DATA:END') {
+      const result = usbFrameBuffer;
+      usbFrameType = null;
+      usbWriteText('OK:DATA_RECEIVED\r\n');
+      if (usbFrameResolve) { usbFrameResolve(result); usbFrameResolve = null; }
+      return;
+    }
+    usbFrameBuffer += line + '\n';
+    if (++usbFrameLineCount % 8 === 0) usbWriteText('OK:CHUNK_ACK\r\n');
+    return;
+  }
+  // BINARY frame
+  if (line.startsWith('BINDATA:BEGIN=') && !usbFrameType) {
+    usbFrameBuffer = []; usbFrameType = 'binary'; usbFrameLineCount = 0; return;
+  }
+  if (usbFrameType === 'binary') {
+    if (line === 'BINDATA:END') {
+      let len = 0;
+      for (const c of usbFrameBuffer) len += c.length;
+      const result = new Uint8Array(len);
+      let off = 0;
+      for (const c of usbFrameBuffer) { result.set(c, off); off += c.length; }
+      usbFrameType = null; usbFrameBuffer = null;
+      usbWriteText('OK:BINDATA_RECEIVED\r\n');
+      if (usbFrameResolve) { usbFrameResolve(result); usbFrameResolve = null; }
+      return;
+    }
+    try {
+      const bin = atob(line);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      usbFrameBuffer.push(bytes);
+    } catch (_) {}
+    if (++usbFrameLineCount % 8 === 0) usbWriteText('OK:CHUNK_ACK\r\n');
+    return;
+  }
+  // Chunk ACK — routed to dedicated counter, not wifiCmdResolve
+  if (line === 'OK:CHUNK_ACK') { onChunkAck(); usbLog(line, 'rx'); return; }
+  // Boot buffer
+  if (!usb_handshakeDone) usb_bootBuffer.push(line);
+  // Command responses
+  if ((line.startsWith('OK:') || line.startsWith('ERR:')) && wifiCmdResolve) {
+    const r = wifiCmdResolve; wifiCmdResolve = null; r(line);
+  }
+  // Log
+  usbLog(line, line.startsWith('ERR:') ? 'err' : 'rx');
+}
+
+// ─── USB Write helpers ────────────────────────────────────────────────────────
+
+async function usbWriteRaw(bytes) {
+  if (!usb_port || !usb_port.writable) return;
+  const w = usb_port.writable.getWriter();
+  try { await w.write(bytes); } finally { w.releaseLock(); }
+}
+
+function usbWriteText(text) { return usbWriteRaw(new TextEncoder().encode(text)); }
+
+function usbWaitForReady(ms) {
+  return new Promise(resolve => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const i = usb_bootBuffer.findIndex(l => l.includes('OK:READY'));
+      if (i !== -1) { clearInterval(iv); usb_bootBuffer.splice(i, 1); resolve(true); }
+      else if (Date.now() - t0 > ms) { clearInterval(iv); resolve(false); }
+    }, 50);
+  });
+}
+
+function usbSendCmd(cmd, ms = 10000) {
+  return new Promise(async (resolve, reject) => {
+    if (!usb_port || !usb_port.writable) { reject(new Error('USB not connected')); return; }
+    const timer = setTimeout(() => { wifiCmdResolve = null; reject(new Error('Timeout')); }, ms);
+    wifiCmdResolve = line => { clearTimeout(timer); resolve(line); };
+    usbLog('>> ' + cmd, 'tx');
+    await usbWriteText(cmd + '\r\n');
+  });
+}
+
+function usbWaitForLine(expected, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { wifiCmdResolve = null; reject(new Error('Timeout')); }, ms);
+    wifiCmdResolve = line => { clearTimeout(timer); resolve(line); };
+  });
+}
+
+// ─── USB Frame send/receive ───────────────────────────────────────────────────
+
+async function usbSendBinaryFrame(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  resetAckCounter();
+  await usbWriteText('BINDATA:BEGIN=' + bytes.length + '\r\n');
+  const chunk = 144;
+  let count = 0;
+  for (let pos = 0; pos < bytes.length; pos += chunk) {
+    const sl = bytes.slice(pos, pos + chunk);
+    let bin = '';
+    for (let i = 0; i < sl.length; i++) bin += String.fromCharCode(sl[i]);
+    await usbWriteText(btoa(bin) + '\r\n');
+    if (++count % 8 === 0) await waitForChunkAck(5000);
+  }
+  await usbWriteText('BINDATA:END\r\n');
+}
+
+function usbReceiveBinaryFrame(ms = 60000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      usbFrameResolve = null; usbFrameType = null; usbFrameBuffer = null;
+      reject(new Error('Binary frame timeout'));
+    }, ms);
+    usbFrameResolve = r => { clearTimeout(timer); resolve(r); };
+  });
+}
+
+function usbReceiveTextFrame(ms = 30000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      usbFrameResolve = null; usbFrameType = null; usbFrameBuffer = null;
+      reject(new Error('Text frame timeout'));
+    }, ms);
+    usbFrameResolve = r => { clearTimeout(timer); resolve(r); };
+  });
+}
+
+// ─── Device actions ───────────────────────────────────────────────────────────
+
+async function downloadConfig() {
+  if (!checkConnected()) return;
+  usbLog('Downloading config.txt…', 'sys');
+  try {
+    const fp = usbReceiveBinaryFrame(20000);
+    await usbWriteText('FILE:DOWNLOAD=config.txt\r\n');
+    usbLog('>> FILE:DOWNLOAD=config.txt', 'tx');
+    const bin = await fp;
+    const text = new TextDecoder().decode(bin);
+    usbLog('config.txt received (' + text.length + ' bytes)', 'rx');
+    parseConfig(text);
+    configLoaded = true;
+    document.getElementById('btn-ul-config').disabled = false;
+    setFileName('config.txt');
+    showToast('Config downloaded from device', 'success');
+  } catch (e) {
+    usbLog('Download failed: ' + e.message, 'err');
+    showToast('Config download failed: ' + e.message, 'danger');
+  }
+}
+
+async function downloadDefaultConfig() {
+  const url = 'https://lisy.dev/swrep/soundboards/GOSOWAV/SD_Card/default_config.txt';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    parseConfig(text);
+    configLoaded = true;
+    if (isConnected) document.getElementById('btn-ul-config').disabled = false;
+    setFileName('default_config.txt');
+    showToast('Default config loaded', 'success');
+  } catch (e) {
+    showToast('Could not load default config: ' + e.message, 'danger');
+  }
+}
+
+async function uploadConfig() {
+  if (!checkConnected()) return;
+  const text = generateConfig();
+  usbLog('Uploading config.txt…', 'sys');
+  try {
+    await usbWriteText('FILE:UPLOAD=config.txt\r\n');
+    usbLog('>> FILE:UPLOAD=config.txt', 'tx');
+    await usbSleep(80);
+    await usbSendBinaryFrame(new TextEncoder().encode(text).buffer);
+    const resp = await usbWaitForLine('OK:', 8000);
+    usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
+    showToast(resp.startsWith('OK:') ? 'Config uploaded to device' : 'Upload failed: ' + resp,
+              resp.startsWith('OK:') ? 'success' : 'danger');
+  } catch (e) {
+    usbLog('Upload failed: ' + e.message, 'err');
+    showToast('Config upload failed: ' + e.message, 'danger');
+  }
+}
+
+async function rebootDevice() {
+  if (!checkConnected()) return;
+  if (!confirm('Reboot the PWAVplayer device?')) return;
+  try {
+    await usbWriteText('REBOOT\r\n');
+    usbLog('>> REBOOT', 'tx');
+    showToast('Reboot command sent. Device is restarting…', 'success');
+  } catch (e) {
+    usbLog('Reboot error: ' + e.message, 'err');
+  }
+}
+
+async function uploadFileToDevice(file) {
+  if (!file) return;
+  if (!checkConnected()) return;
+  const statusEl = document.getElementById('upload-status');
+  const wrapEl   = document.getElementById('upload-progress-wrap');
+  const barEl    = document.getElementById('upload-progress-bar');
+
+  statusEl.textContent = 'Reading…';
+  wrapEl.classList.remove('d-none');
+  barEl.style.width = '0%';
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  statusEl.textContent = 'Uploading ' + file.name + ' (' + bytes.length + ' bytes)…';
+  usbLog('Uploading: ' + file.name + ' (' + bytes.length + ' bytes)', 'sys');
+
+  try {
+    await usbWriteText('FILE:UPLOAD=' + file.name + '\r\n');
+    usbLog('>> FILE:UPLOAD=' + file.name, 'tx');
+    await usbSleep(80);
+    resetAckCounter();
+    await usbWriteText('BINDATA:BEGIN=' + bytes.length + '\r\n');
+    const chunkSize = 144;
+    let lineCount = 0;
+    for (let pos = 0; pos < bytes.length; pos += chunkSize) {
+      const sl = bytes.slice(pos, pos + chunkSize);
+      let bin = '';
+      for (let i = 0; i < sl.length; i++) bin += String.fromCharCode(sl[i]);
+      await usbWriteText(btoa(bin) + '\r\n');
+      lineCount++;
+      if (lineCount % 8 === 0) await waitForChunkAck(5000);
+      barEl.style.width = Math.round(((pos + chunkSize) / bytes.length) * 100) + '%';
+    }
+    await usbWriteText('BINDATA:END\r\n');
+    barEl.style.width = '100%';
+    const resp = await usbWaitForLine('OK:', 10000);
+    usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
+    showToast(resp.startsWith('OK:') ? 'File "' + file.name + '" uploaded' : 'Upload failed: ' + resp,
+              resp.startsWith('OK:') ? 'success' : 'danger');
+    statusEl.textContent = resp.startsWith('OK:') ? 'Done: ' + file.name : 'Failed';
+  } catch (e) {
+    usbLog('File upload error: ' + e.message, 'err');
+    showToast('File upload failed: ' + e.message, 'danger');
+    statusEl.textContent = 'Error';
+  }
+  setTimeout(() => wrapEl.classList.add('d-none'), 2000);
+}
+
+async function listFiles() {
+  if (!checkConnected()) return;
+  const container = document.getElementById('files-container');
+  container.textContent = 'Loading…';
+  usbLog('Requesting file list…', 'sys');
+  try {
+    const fp = usbReceiveTextFrame(15000);
+    await usbWriteText('FILE:LIST\r\n');
+    usbLog('>> FILE:LIST', 'tx');
+    const jsonText = await fp;
+    usbLog('File list received', 'rx');
+    let files;
+    try {
+      const data = JSON.parse(jsonText);
+      files = Array.isArray(data) ? data : (data.files || []);
+    } catch (_) {
+      files = jsonText.trim().split('\n').filter(Boolean).map(l => {
+        const p = l.split('\t');
+        return { name: p[0], size: p[1] || '' };
+      });
+    }
+    renderFileList(container, files);
+  } catch (e) {
+    container.textContent = 'Error: ' + e.message;
+    usbLog('File list error: ' + e.message, 'err');
+    showToast('Failed to list files: ' + e.message, 'danger');
+  }
+}
+
+function renderFileList(container, files) {
+  if (!files || !files.length) { container.textContent = 'No files on SD card.'; return; }
+  const tbl = document.createElement('table');
+  tbl.className = 'table table-sm table-hover mb-0';
+  tbl.innerHTML = '<thead><tr><th>Filename</th><th>Size</th><th></th></tr></thead>';
+  const tb = document.createElement('tbody');
+  for (const f of files) {
+    const name = typeof f === 'string' ? f : f.name;
+    const size = typeof f === 'string' ? '' : formatSize(f.size);
+    const nameQ = escHtml(name);
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="font-monospace small">${nameQ}</td>` +
+      `<td class="small text-muted">${escHtml(size)}</td>` +
+      `<td class="d-flex gap-1">` +
+        `<button class="btn btn-outline-secondary btn-sm" onclick="downloadSdFile('${nameQ}')">Download</button>` +
+        `<button class="btn btn-outline-secondary btn-sm" onclick="renameFile('${nameQ}')">Rename</button>` +
+        `<button class="btn btn-outline-danger btn-sm" onclick="deleteFile('${nameQ}')">Delete</button>` +
+      `</td>`;
+    tb.appendChild(tr);
+  }
+  tbl.appendChild(tb);
+  container.innerHTML = '';
+  container.appendChild(tbl);
+}
+
+async function downloadSdFile(name) {
+  if (!checkConnected()) return;
+  usbLog('Downloading: ' + name, 'sys');
+  try {
+    const fp = usbReceiveBinaryFrame(60000);
+    await usbWriteText('FILE:DOWNLOAD=' + name + '\r\n');
+    usbLog('>> FILE:DOWNLOAD=' + name, 'tx');
+    const data = await fp;
+    usbLog('Received ' + data.length + ' bytes', 'rx');
+    const blob = new Blob([data]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    usbLog('Download failed: ' + e.message, 'err');
+    showToast('Download failed: ' + e.message, 'danger');
+  }
+}
+
+async function renameFile(oldName) {
+  const newName = prompt('New name:', oldName);
+  if (!newName || newName === oldName) return;
+  if (!checkConnected()) return;
+  try {
+    const resp = await usbSendCmd('FILE:RENAME=' + oldName + ',' + newName, 5000);
+    if (resp.startsWith('OK:')) {
+      showToast('Renamed "' + oldName + '" to "' + newName + '".', 'success');
+      listFiles();
+    } else {
+      showToast('Rename failed: ' + resp, 'danger');
+    }
+  } catch (e) {
+    showToast('Rename failed: ' + e.message, 'danger');
+  }
+}
+
+async function deleteFile(name) {
+  if (!confirm('Delete "' + name + '"?')) return;
+  if (!checkConnected()) return;
+  try {
+    const resp = await usbSendCmd('FILE:DELETE=' + name, 5000);
+    if (resp.startsWith('OK:')) {
+      showToast('Deleted "' + name + '".', 'success');
+      listFiles();
+    } else {
+      showToast('Delete failed: ' + resp, 'danger');
+    }
+  } catch (e) {
+    showToast('Delete failed: ' + e.message, 'danger');
+  }
+}
+
+function formatSize(b) {
+  const n = parseInt(b);
+  if (isNaN(n) || b === '') return String(b || '');
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+// ─── Update Tab ───────────────────────────────────────────────────────────────
+
+async function clockUpdateFirmware() {
+  // Check if a server version is selected
+  const sel = document.getElementById('serverFwSelect');
+  const serverUrl = sel ? sel.value : '';
+
+  if (serverUrl) {
+    // Download from server, then upload via USB as update.bin
+    const statusEl = document.getElementById('clockUpdateStatus');
+    statusEl.textContent = 'Downloading firmware…';
+    try {
+      const dlResp = await fetch(serverUrl);
+      if (!dlResp.ok) throw new Error('Download failed: HTTP ' + dlResp.status);
+      const buf = await dlResp.arrayBuffer();
+      statusEl.textContent = 'Uploading to device…';
+      if (!checkConnected()) { statusEl.textContent = 'Not connected'; return; }
+      const bytes = new Uint8Array(buf);
+      await usbWriteText('FILE:UPLOAD=update.bin\r\n');
+      usbLog('>> FILE:UPLOAD=update.bin (' + bytes.length + ' bytes)', 'tx');
+      await usbSleep(80);
+      await usbSendBinaryFrame(buf);
+      const resp = await usbWaitForLine('OK:', 30000);
+      if (resp.startsWith('OK:')) {
+        statusEl.textContent = 'Uploaded — rebooting…';
+        await rebootAfterUpdate();
+      } else {
+        statusEl.textContent = 'Failed: ' + resp;
+        showToast('Upload failed: ' + resp, 'danger');
+      }
+    } catch (e) {
+      statusEl.textContent = 'Error: ' + e.message;
+      showToast('Firmware update failed: ' + e.message, 'danger');
+    }
+    return;
+  }
+
+  // Local file upload
+  const fileInput = document.getElementById('clockUpdateInput');
+  const file = fileInput.files[0];
+  if (!file) { showToast('Please select a .bin file.', 'warning'); return; }
+  if (!file.name.toLowerCase().endsWith('.bin')) {
+    showToast('Only .bin files are allowed.', 'warning'); return;
+  }
+  if (!checkConnected()) return;
+
+  const statusEl = document.getElementById('clockUpdateStatus');
+  statusEl.textContent = 'Uploading…';
+  try {
+    const buf = await file.arrayBuffer();
+    await usbWriteText('FILE:UPLOAD=update.bin\r\n');
+    usbLog('>> FILE:UPLOAD=update.bin', 'tx');
+    await usbSleep(80);
+    await usbSendBinaryFrame(buf);
+    const resp = await usbWaitForLine('OK:', 30000);
+    if (resp.startsWith('OK:')) {
+      statusEl.textContent = 'Uploaded — rebooting…';
+      await rebootAfterUpdate();
+    } else {
+      statusEl.textContent = 'Failed: ' + resp;
+      showToast('Upload failed: ' + resp, 'danger');
+    }
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    showToast('Firmware update failed: ' + e.message, 'danger');
+  }
+}
+
+async function rebootAfterUpdate() {
+  await usbSleep(300);
+  try { await usbWriteText('REBOOT\r\n'); } catch (_) {}
+  showToast('Firmware uploaded. Device is rebooting…', 'success');
+}
+
+async function clockFetchServerFirmware() {
+  const btn = document.getElementById('btnFetchServerFw');
+  btn.disabled = true;
+  btn.textContent = 'Fetching…';
+  try {
+    const resp = await fetch(BIN_BASE);
+    const html = await resp.text();
+    // Match .bin filenames in directory listing
+    const re = /href="([^"]+\.bin)"/gi;
+    const files = [];
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      const name = m[1].replace(/^.*\//, '');
+      if (name && !files.includes(name)) files.push(name);
+    }
+    files.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    const sel = document.getElementById('serverFwSelect');
+    sel.innerHTML = '<option value="">&#8212; select &#8212;</option>';
+    for (const f of files) {
+      const opt = document.createElement('option');
+      opt.value = BIN_BASE + f;
+      opt.textContent = f;
+      sel.appendChild(opt);
+    }
+    if (files.length === 0) {
+      showToast('No firmware files found on server.', 'warning');
+    } else {
+      sel.classList.remove('d-none');
+      document.getElementById('btnInstallServerFw').classList.remove('d-none');
+    }
+  } catch (e) {
+    showToast('Could not fetch firmware list: ' + e.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Fetch versions';
+  }
+}
+
+async function usbFlashESP32() {
+  if (!('serial' in navigator)) {
+    showToast('Web Serial API not available — Chrome or Edge (Desktop) required.', 'danger');
+    return;
+  }
+
+  const btn      = document.getElementById('btnUsbFlash');
+  const statusEl = document.getElementById('usbFlashStatus');
+  const logEl    = document.getElementById('usbFlashLog');
+
+  function flashLog(msg) {
+    logEl.classList.remove('d-none');
+    logEl.textContent += msg + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  btn.disabled = true;
+  logEl.textContent = '';
+  statusEl.textContent = '';
+
+  let transport = null;
+  try {
+    // 1. Download firmware files from lisy.dev
+    flashLog('Downloading firmware files from lisy.dev…');
+    const fileArray = [];
+    for (const f of FLASH_FILES) {
+      flashLog('  Fetching ' + f.name + '…');
+      const resp = await fetch(ESPTOOL_BASE + f.name);
+      if (!resp.ok) throw new Error('Download failed: ' + f.name + ' (HTTP ' + resp.status + ')');
+      const buf = await resp.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let data = '';
+      for (let i = 0; i < bytes.length; i++) data += String.fromCharCode(bytes[i]);
+      fileArray.push({ data, address: f.address });
+      flashLog('  OK (' + (buf.byteLength / 1024).toFixed(1) + ' KB)');
+    }
+
+    // 2. Load esptool-js
+    flashLog('Loading esptool-js…');
+    const { ESPLoader, Transport } = await import('https://esm.sh/esptool-js@0.4.1');
+
+    // 3. Select USB port
+    flashLog('Please select the USB device in the browser dialog…');
+    const port = await navigator.serial.requestPort();
+    transport = new Transport(port, false);
+    const terminal = {
+      clean() {},
+      writeLine(data) { flashLog(data); },
+      write(data) {}
+    };
+    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
+
+    // 4. Connect to chip
+    flashLog('Connecting to ESP32…');
+    const chip = await esploader.main();
+    flashLog('Chip: ' + chip);
+
+    // 5. Flash
+    flashLog('Starting flash…');
+    await esploader.writeFlash({
+      fileArray,
+      flashSize: 'keep',
+      eraseAll: false,
+      compress: true,
+      reportProgress(fileIndex, written, total) {
+        const pct = Math.round(written / total * 100);
+        statusEl.textContent = FLASH_FILES[fileIndex].name + ': ' + pct + '%';
+        if (written === total) flashLog('  ' + FLASH_FILES[fileIndex].name + ' done.');
+      }
+    });
+
+    // 6. Reset
+    flashLog('Flash complete! Resetting ESP32…');
+    await esploader.hardReset();
+    await transport.disconnect();
+    transport = null;
+
+    statusEl.textContent = 'Done!';
+    flashLog('Done. Device is restarting.');
+    showToast('ESP32 flashed successfully!', 'success');
+
+  } catch (e) {
+    if (e.name === 'NotSelectedError') {
+      flashLog('Cancelled (no device selected).');
+      statusEl.textContent = '';
+    } else {
+      flashLog('Error: ' + e.message);
+      showToast('Flash failed: ' + e.message, 'danger');
+      statusEl.textContent = 'Error';
+    }
+    if (transport) { try { await transport.disconnect(); } catch(_){} }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ─── Config parse / generate ──────────────────────────────────────────────────
+
+function parseConfig(text) {
+  const v = {};
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    v[line.slice(0, eq).trim().toLowerCase()] = line.slice(eq + 1).trim();
+  }
+  if (v.dac  !== undefined) setSelectVal('cfg-dac',  v.dac);
+  if (v.mix  !== undefined) setSelectVal('cfg-mix',  v.mix);
+  if (v.evt  !== undefined) setSelectVal('cfg-evt',  v.evt);
+  if (v.deb  !== undefined) document.getElementById('cfg-deb').value  = v.deb;
+  if (v.rpd  !== undefined) document.getElementById('cfg-rpd').value  = v.rpd;
+  if (v.ser  !== undefined) { setSelectVal('cfg-ser', v.ser); onSerChange(); }
+  if (v.addr !== undefined) document.getElementById('cfg-addr').value = v.addr;
+}
+
+function generateConfig() {
+  const dac  = document.getElementById('cfg-dac').value;
+  const mix  = document.getElementById('cfg-mix').value;
+  const evt  = document.getElementById('cfg-evt').value;
+  const deb  = document.getElementById('cfg-deb').value;
+  const rpd  = document.getElementById('cfg-rpd').value;
+  const ser  = document.getElementById('cfg-ser').value;
+  const addr = document.getElementById('cfg-addr').value;
+  let s = `dac=${dac}\nmix=${mix}\nevt=${evt}\ndeb=${deb}\nrpd=${rpd}\nser=${ser}\n`;
+  if (ser === 'i2c') s += `addr=${addr}\n`;
+  return s;
+}
+
+function setSelectVal(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  for (const opt of el.options) { if (opt.value === val) { el.value = val; return; } }
+}
+
+function onSerChange() {
+  const row = document.getElementById('row-addr');
+  document.getElementById('cfg-ser').value === 'i2c'
+    ? row.classList.remove('field-hidden')
+    : row.classList.add('field-hidden');
+}
+
+// ─── Navbar file operations ───────────────────────────────────────────────────
+
+function defaultConfig() {
+  return { dac:'12', mix:'div2', evt:'flat', deb:'5', rpd:'60', ser:'none', addr:'0x66' };
+}
+
+function applyDefaults() {
+  const d = defaultConfig();
+  setSelectVal('cfg-dac', d.dac); setSelectVal('cfg-mix', d.mix);
+  setSelectVal('cfg-evt', d.evt);
+  document.getElementById('cfg-deb').value  = d.deb;
+  document.getElementById('cfg-rpd').value  = d.rpd;
+  setSelectVal('cfg-ser', d.ser); onSerChange();
+  document.getElementById('cfg-addr').value = d.addr;
+}
+
+document.getElementById('btnNew').addEventListener('click', () => {
+  if (!confirm('Reset to default config?')) return;
+  fsFileHandle = null;
+  document.getElementById('currentFileName').textContent = '— new config —';
+  document.getElementById('currentFileName').title = '';
+  applyDefaults();
+  document.getElementById('general-status').textContent = 'New config';
+});
+
+document.getElementById('btnOpen').addEventListener('click', openConfigFile);
+document.getElementById('btnSave').addEventListener('click', saveConfig);
+document.getElementById('btnSaveAs').addEventListener('click', saveConfigAs);
+document.getElementById('btnFetchServerFw').addEventListener('click', clockFetchServerFirmware);
+document.getElementById('btnClockUpdate').addEventListener('click', clockUpdateFirmware);
+document.getElementById('btnInstallServerFw').addEventListener('click', clockUpdateFirmware);
+document.getElementById('btnUsbFlash').addEventListener('click', usbFlashESP32);
+
+async function openConfigFile() {
+  // Try File System Access API first
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Config files', accept: { 'text/plain': ['.txt', '.cfg'] } }]
+      });
+      fsFileHandle = handle;
+      const file = await handle.getFile();
+      const text = await file.text();
+      parseConfig(text);
+      configLoaded = true;
+      if (isConnected) document.getElementById('btn-ul-config').disabled = false;
+      setFileName(file.name);
+      showToast('config.txt opened', 'success');
+      return;
+    } catch (e) {
+      if (e.name !== 'AbortError') {} // fall through to classic picker
+    }
+  }
+  // Classic file input fallback
+  const input = document.getElementById('fileInput');
+  input.onchange = async () => {
+    if (!input.files[0]) return;
+    const file = input.files[0];
+    const text = await file.text();
+    parseConfig(text);
+    configLoaded = true;
+    if (isConnected) document.getElementById('btn-ul-config').disabled = false;
+    setFileName(file.name);
+    showToast('config.txt opened', 'success');
+    input.value = '';
+  };
+  input.click();
+}
+
+async function saveConfig() {
+  if (fsFileHandle) {
+    try {
+      const writable = await fsFileHandle.createWritable();
+      await writable.write(generateConfig());
+      await writable.close();
+      showToast('config.txt saved', 'success');
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  saveConfigAs();
+}
+
+async function saveConfigAs() {
+  const text = generateConfig();
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'config.txt',
+        types: [{ description: 'Config files', accept: { 'text/plain': ['.txt'] } }]
+      });
+      fsFileHandle = handle;
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      const f = await handle.getFile();
+      setFileName(f.name);
+      showToast('config.txt saved', 'success');
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  // Fallback: download
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'config.txt'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('config.txt downloaded', 'success');
+}
+
+function setFileName(name) {
+  const el = document.getElementById('currentFileName');
+  el.textContent = name;
+  el.title = name;
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+
+function setStatus(state) {
+  const dot  = document.getElementById('usb-status-dot');
+  const text = document.getElementById('usb-status-text');
+  isConnected = (state === 'connected');
+  dot.className  = 'usb-status-dot' + (state === 'connected' ? ' connected' : state === 'handshaking' ? ' handshaking' : '');
+  text.className = 'usb-status-text' + (state === 'connected' ? ' connected' : state === 'handshaking' ? ' handshaking' : '');
+  text.textContent = { disconnected: 'Disconnected', handshaking: 'Handshaking…', connected: 'Connected' }[state] || state;
+  document.getElementById('btn-connect').disabled    = state !== 'disconnected';
+  document.getElementById('btn-disconnect').disabled = state === 'disconnected';
+}
+
+function setDeviceButtons(on) {
+  ['btn-dl-config','btn-reboot','btn-upload-file','btn-list-files'].forEach(id => {
+    document.getElementById(id).disabled = !on;
+  });
+  document.getElementById('btn-ul-config').disabled = !(on && configLoaded);
+}
+
+function checkConnected() {
+  if (!isConnected) { showToast('Please connect to the device first (Device tab)', 'warning'); return false; }
+  return true;
+}
+
+function usbSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Chunk ACK helpers ───────────────────────────────────────────────────────
+
+function resetAckCounter() {
+  _ackPending = 0;
+  if (_ackTimer) { clearTimeout(_ackTimer); _ackTimer = null; }
+  _ackResolve = null;
+}
+
+function onChunkAck() {
+  if (_ackResolve) {
+    clearTimeout(_ackTimer); _ackTimer = null;
+    const r = _ackResolve; _ackResolve = null; r();
+  } else {
+    _ackPending++;
+  }
+}
+
+function waitForChunkAck(ms) {
+  if (_ackPending > 0) { _ackPending--; return Promise.resolve(); }
+  return new Promise((resolve, reject) => {
+    _ackTimer = setTimeout(() => { _ackResolve = null; reject(new Error('Timeout')); }, ms);
+    _ackResolve = () => { clearTimeout(_ackTimer); _ackTimer = null; resolve(); };
+  });
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+setStatus('disconnected');
+</script>
+</body>
+</html>

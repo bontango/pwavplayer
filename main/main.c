@@ -53,6 +53,7 @@ extern void WAVPlayer(void *pvParameters);
 extern void WAVDummy(void *pvParameters);
 extern void SerialUART(void *pvParameters);
 extern void SerialI2C(void *pvParameters);
+extern void UsbSerial(void *pvParameters);
 extern void PinEvents(void *pvParameters);
 extern void PinEvents0(void *pvParameters);
 extern void EncEventW11(void *pvParameters);
@@ -75,6 +76,9 @@ void app_main(void) {
     xpinevt = xStreamBufferCreate(IP_BUF_SZ,1);
     xTaskCreatePinnedToCore(&WAVPlayer, "WAVplayer", 8192, NULL, tskIDLE_PRIORITY+10, NULL, CORE_0);
 //    xTaskCreatePinnedToCore(&WAVDummy, "WAVdummy", 4096, NULL, tskIDLE_PRIORITY+10, NULL, CORE_0);
+
+    // Config-editor USB serial (UART0) always available, independent of ser= setting
+    xTaskCreatePinnedToCore(&UsbSerial, "UsbSerial", 8192, NULL, (tskIDLE_PRIORITY + 2), NULL, CORE_1);
 
     switch (gconf[CONF_SER]) {
     case CONF_SER_UART:
