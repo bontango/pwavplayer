@@ -40,13 +40,13 @@ static const char *TAG = "USB";
 
 // UART configuration
 #define USB_UART_PORT   UART_NUM_0
-#define USB_BAUD_RATE   115200
+#define USB_BAUD_RATE   921600
 #define USB_RXBUF_SZ    4096
 
 // Protocol constants
 #define USB_LINE_MAX    256
-#define B64_CHUNK       144     // raw bytes per base64 line (-> 192 chars encoded)
-#define B64_OUT_MAX     200
+#define B64_CHUNK       720     // raw bytes per base64 line (-> 960 chars encoded)
+#define B64_OUT_MAX     1024
 #define DECODE_BUF_SZ   200
 #define ACK_EVERY       8
 #define ACK_TIMEOUT_MS  5000
