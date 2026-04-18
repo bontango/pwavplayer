@@ -1016,6 +1016,13 @@ async function usbFlashESP32() {
   logEl.textContent = '';
   statusEl.textContent = '';
 
+  // Close any existing serial connection first — the port can only be opened once
+  if (usb_port) {
+    flashLog('Closing existing USB connection…');
+    await usbDisconnect();
+    await new Promise(r => setTimeout(r, 600));
+  }
+
   let transport = null;
   try {
     // 1. Download firmware files from lisy.dev
@@ -1023,7 +1030,7 @@ async function usbFlashESP32() {
     const fileArray = [];
     for (const f of FLASH_FILES) {
       flashLog('  Fetching ' + f.name + '…');
-      const resp = await fetch(ESPTOOL_BASE + f.name);
+      const resp = await fetch(ESPTOOL_BASE + f.name, { cache: 'no-store' });
       if (!resp.ok) throw new Error('Download failed: ' + f.name + ' (HTTP ' + resp.status + ')');
       const buf = await resp.arrayBuffer();
       const bytes = new Uint8Array(buf);
