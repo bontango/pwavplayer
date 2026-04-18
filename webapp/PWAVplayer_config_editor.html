@@ -103,7 +103,7 @@
 <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-dark bg-dark px-3 py-2">
   <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
-    <small class="text-secondary fw-normal">v1.0</small>
+    <small class="text-secondary fw-normal">v1.01</small>
   </span>
   <span id="currentFileName" class="text-secondary text-truncate mx-auto"
         style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
@@ -371,10 +371,10 @@ const BIN_BASE     = 'https://lisy.dev/swrep/soundboards/GOSOWAV/bin/';
 const ESPTOOL_BASE = 'https://lisy.dev/swrep/soundboards/GOSOWAV/esptool/';
 
 const FLASH_FILES = [
-  { name: 'bootloader.bin',       address: 0x1000 },
-  { name: 'partition-table.bin',  address: 0x8000 },
-  { name: 'ota_data_initial.bin', address: 0xd000 },
-  { name: 'pwavplayer.bin',       address: 0x10000 },
+  { name: 'bootloader.bin',       address: 0x1000  },
+  { name: 'partition-table.bin',  address: 0x8000  },
+  { name: 'ota_data_initial.bin', address: 0xf000  },
+  { name: 'pwavplayer.bin',       address: 0x20000 },
 ];
 
 // ─── State ────────────────────────────────────────────────────────────────────
