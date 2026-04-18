@@ -6,3 +6,5 @@ dependencies.lock
 .claude/
 CLAUDE.md
 config.txt
+.env
+releases/
