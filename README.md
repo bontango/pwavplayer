@@ -29,21 +29,28 @@ The file `config.txt` must be placed in the root directory of the SD card. Each 
 |-----|--------|---------|-------------|
 | `dac` | `12`, `16` | `12` | DAC output bit depth |
 | `mix` | `sum`, `div2`, `sqrt` | `div2` | Mixing mode for multiple simultaneous tracks |
-| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `flat` | GPIO event mode |
-| `deb` | number (ms) | `5` | Debounce time in milliseconds |
+| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `bg80` | GPIO event mode |
+| `deb` | number (ms) | `10` | Debounce time in milliseconds |
 | `rpd` | number (ms) | `60` | Rest period in milliseconds (`flat` mode only) |
-| `ser` | `none`, `uart`, `i2c` | `none` | Serial interface |
+| `ser` | `none`, `uart`, `i2c` | `none` | Serial interface for sound commands |
 | `addr` | hex value | `0x66` | I2C slave address (only when `ser=i2c`) |
+| `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baud rate of the USB config-editor port (UART0) |
 
 **Example:**
 ```
 dac=12
 mix=div2
-evt=flat
+evt=bg80
 deb=10
 rpd=40
 ser=uart
+usbbaud=921600
 ```
+
+> **Note:** If `config.txt` is missing, the firmware starts with the default values above.
+> The `usbbaud` default of `115200` keeps `idf.py monitor` working out of the box.
+> Raise it (e.g. `921600`) for faster file transfers with the config editor — then match
+> the editor's "Baud" drop-down to the same value before reconnecting.
 
 ---
 
@@ -192,4 +199,6 @@ The directory `webapp/` contains `PWAVplayer_config_editor.html` — a browser-b
 
 ### Protocol
 
-Communication uses `UART_NUM_0` (115200 baud) with a frame-based text protocol. See `webapp/API.md` for details.
+Communication uses `UART_NUM_0` with a frame-based text protocol. The baud rate is
+configurable via the `usbbaud` key in `config.txt` (default `115200`). See
+`webapp/API.md` for protocol details and `webapp/README.md` for operating instructions.

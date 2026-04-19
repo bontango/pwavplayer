@@ -29,21 +29,28 @@ Die Datei `config.txt` muss im Wurzelverzeichnis der SD-Karte liegen. Jede Zeile
 |-----------|-------|----------|--------------|
 | `dac` | `12`, `16` | `12` | Bit-Tiefe des DAC-Ausgangs |
 | `mix` | `sum`, `div2`, `sqrt` | `div2` | Mischverfahren bei mehreren gleichzeitigen Tracks |
-| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `flat` | GPIO-Eventmodus |
-| `deb` | Zahl (ms) | `5` | Entprellzeit in Millisekunden |
+| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `bg80` | GPIO-Eventmodus |
+| `deb` | Zahl (ms) | `10` | Entprellzeit in Millisekunden |
 | `rpd` | Zahl (ms) | `60` | Ruheperiode in Millisekunden (nur `flat`) |
-| `ser` | `none`, `uart`, `i2c` | `none` | Serielle Schnittstelle |
+| `ser` | `none`, `uart`, `i2c` | `none` | Serielle Schnittstelle für Sound-Kommandos |
 | `addr` | Hex-Zahl | `0x66` | I2C-Slave-Adresse (nur wenn `ser=i2c`) |
+| `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baudrate des USB-Config-Editor-Ports (UART0) |
 
 **Beispiel:**
 ```
 dac=12
 mix=div2
-evt=flat
+evt=bg80
 deb=10
 rpd=40
 ser=uart
+usbbaud=921600
 ```
+
+> **Hinweis:** Fehlt die Datei `config.txt`, startet die Firmware mit den obigen Standardwerten.
+> Der `usbbaud`-Default von `115200` lässt `idf.py monitor` ohne Zusatzparameter laufen.
+> Für schnellere Dateiübertragungen im Editor kann z. B. `921600` gesetzt werden — dann
+> muss auch das Baud-Drop-down im Editor vor dem nächsten Connect entsprechend angepasst werden.
 
 ---
 
@@ -192,4 +199,7 @@ Im Verzeichnis `webapp/` befindet sich `PWAVplayer_config_editor.html` – ein b
 
 ### Protokoll
 
-Die Kommunikation erfolgt über `UART_NUM_0` (115200 Baud) mit einem frame-basierten Textprotokoll. Details siehe `webapp/API.md`.
+Die Kommunikation erfolgt über `UART_NUM_0` mit einem frame-basierten Textprotokoll. Die
+Baudrate wird über den Schlüssel `usbbaud` in `config.txt` konfiguriert (Standard `115200`).
+Details zum Protokoll siehe `webapp/API.md`, Bedienungshinweise zum Editor in
+`webapp/README.md`.

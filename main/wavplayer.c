@@ -81,6 +81,7 @@ static struct stac {
 
 // Config data
 uint16_t gconf[CONF_MAX];
+uint32_t gusbbaud;
 
 // Sound file descriptor
 #define NSATTR 4
@@ -140,8 +141,8 @@ const char mount_point[] = "/sdcard";
 void ReadConfig(char *fname) {
     FILE *fp;
     if ((fp = fopen(fname,"r")) == NULL) {
+        ESP_LOGI(LOG, "No config found, using defaults");
         return;
-        ESP_LOGI(LOG, "No config found");
     }
 #   define LBUF_SZ 100 
     char lbuf[LBUF_SZ];
@@ -181,6 +182,9 @@ void ReadConfig(char *fname) {
             if (strcmp(key,"addr") == 0) {
                 gconf[CONF_I2C_ADDR] = (uint16_t)strtol(val,NULL,16);
             }
+            if (strcmp(key,"usbbaud") == 0) {
+                gusbbaud = (uint32_t)strtoul(val,NULL,10);
+            }
         }
     }
     fclose(fp);
@@ -190,11 +194,12 @@ void InitConfig(void) {
     // set all defaults
     gconf[CONF_DAC] = CONF_DAC_12;
     gconf[CONF_MIX] = CONF_MIX_DIV2;
-    gconf[CONF_EVT] = CONF_EVT_FLAT;
-    gconf[CONF_DEB] = 5; // 5ms
+    gconf[CONF_EVT] = CONF_EVT_BG80;
+    gconf[CONF_DEB] = 10; // 10ms
     gconf[CONF_RESTPD] = 60; // 60ms
     gconf[CONF_SER] = CONF_SER_NONE;
     gconf[CONF_I2C_ADDR] = 0x66;
+    gusbbaud = 115200;
 }
 
 

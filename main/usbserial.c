@@ -40,8 +40,9 @@ static const char *TAG = "USB";
 
 // UART configuration
 #define USB_UART_PORT   UART_NUM_0
-#define USB_BAUD_RATE   921600
 #define USB_RXBUF_SZ    4096
+
+extern uint32_t gusbbaud;
 
 // Protocol constants
 #define USB_LINE_MAX    256
@@ -296,7 +297,7 @@ static void handle_file_upload(const char *fname) {
 void UsbSerial(void *pvParameters) {
 
     uart_config_t cfg = {
-        .baud_rate  = USB_BAUD_RATE,
+        .baud_rate  = (int)gusbbaud,
         .data_bits  = UART_DATA_8_BITS,
         .parity     = UART_PARITY_DISABLE,
         .stop_bits  = UART_STOP_BITS_1,
@@ -310,7 +311,7 @@ void UsbSerial(void *pvParameters) {
     ESP_ERROR_CHECK(uart_driver_install(USB_UART_PORT,
                                         USB_RXBUF_SZ, 0, 0, NULL, 0));
 
-    ESP_LOGI(TAG, "USB serial ready @ %d baud", USB_BAUD_RATE);
+    ESP_LOGI(TAG, "USB serial ready @ %u baud", (unsigned)gusbbaud);
 
     // Announce readiness proactively
     usb_tx("OK:READY\r\n");

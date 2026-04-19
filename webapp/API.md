@@ -4,7 +4,9 @@ This document defines the USB serial API implemented in `main/usbserial.c` to su
 PWAVplayer Config Editor web app (`webapp/PWAVplayer_config_editor.html`).
 
 The editor communicates via the **Web Serial API** (Chrome/Edge) using a frame-based text protocol
-over UART (115200 baud by default).
+over UART0. The baud rate is configurable via the `usbbaud` key in `config.txt`
+(default `115200`; also supported: `230400`, `460800`, `921600`). Both the firmware port and
+the editor's "Baud" drop-down must be set to the same value.
 
 ---
 
@@ -230,8 +232,9 @@ Device TX:  OK:REBOOTING\r\n
 ### Implementation in `main/usbserial.c`
 
 The API is fully implemented in `main/usbserial.c` as the `UsbSerial` FreeRTOS task.
-The task runs on `UART_NUM_0` (the ESP32 USB-CDC / JTAG UART) at 115200 baud and is
-independent of the sound-command serial interface (`cserial.c`).
+The task runs on `UART_NUM_0` (the ESP32 USB-CDC / JTAG UART) and is independent of the
+sound-command serial interface (`cserial.c`). The baud rate is read from the global
+`gusbbaud` (set by `ReadConfig()` from the `usbbaud` key in `config.txt`, default `115200`).
 
 ### SD Card Mount Point
 
@@ -246,8 +249,9 @@ from `wavplayer.c` and used by all `cmdapi_*` functions in `cmdapi.c`.
 
 ### UART Port
 
-Current config: `UART_NUM_0`, 115200 baud (no dedicated TX/RX GPIOs — uses the built-in
-USB serial converter). See `usbserial.c` constants `USB_UART_PORT` and `USB_BAUD_RATE`.
+Current config: `UART_NUM_0`, baud rate from `gusbbaud` (default `115200`, configurable via
+`usbbaud=` in `config.txt`). No dedicated TX/RX GPIOs — uses the built-in USB serial
+converter. See `usbserial.c` (`USB_UART_PORT`, `gusbbaud`).
 
 ### Enabling the API
 

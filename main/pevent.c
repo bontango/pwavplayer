@@ -163,8 +163,6 @@ static void IsrFlat(void* arg) {
     
     TickType_t tc = xTaskGetTickCount();
 
-ets_printf("Int sf: %d\n",id);
-
     // check rest period
     if ((tc - spl[sf].last) < spl[sf].restpd) {
         spl[sf].last = tc;  // move last seen forward
