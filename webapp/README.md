@@ -51,7 +51,7 @@ match the firmware's `InitConfig()`.
 |-----|--------|---------|---------|
 | `dac` | `12`, `16` | `12` | DAC output bit depth |
 | `mix` | `sum`, `div2`, `sqrt` | `div2` | Track mixing algorithm |
-| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `bg80` | GPIO event mode |
+| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80`, `by35` | `bg80` | GPIO event mode |
 | `deb` | milliseconds | `10` | Debounce time (GPIO edge lockout) |
 | `rpd` | milliseconds | `60` | Rest period — `flat` mode only |
 | `ser` | `none`, `uart`, `i2c` | `none` | Sound-command serial interface |
@@ -78,7 +78,35 @@ init/background, kill) in a table.
 - **Refresh** — re-reads the SD file list.
 - **Write Soundconfig** — renames files on the device so the filenames match the
   attributes you've set in the table.
-- Per-row actions: download, rename, delete.
+- Per-row actions: **Assign**, play, download, rename, delete.
+
+#### Assigning a WAV file to a sound slot
+
+The **Assign** button in each row is the quickest way to put a new WAV file into a
+specific slot (ID `0001`–`0031`). The editor takes care of naming and replacing any
+existing file in that slot.
+
+1. Connect the device (**Device → Connect USB**) and switch to the **Soundfiles** tab.
+2. Click **Refresh** so the table reflects the current SD card contents.
+3. In the row of the desired slot, click **Assign**. A file picker opens — choose the
+   `.wav` file from your computer.
+4. The editor derives the target filename from the slot ID and the source file's base
+   name, e.g. picking `alarm.wav` for slot `0005` produces
+   `0005-xxxx-xxx-alarm.wav` (attributes default to `x` / volume `100`; edit them later
+   via *Write Soundconfig*).
+5. If the slot already holds a different file, you are asked to confirm the
+   replacement — the old file is deleted before the new one is uploaded. If the target
+   name is identical, you are asked whether to overwrite.
+6. The **Assign** button shows upload progress (`0%` → `100%`). On success a toast
+   confirms the new filename and the table reloads automatically.
+7. Adjust attributes (loop / break / init / background / kill / volume) in the table and
+   click **Write Soundconfig** to rename the file accordingly.
+
+> Tip: the description part of the filename is sanitized — only letters, digits and
+> dashes are kept. Special characters and spaces are replaced with `-`.
+>
+> Tip: for many files at once it is faster to raise `usbbaud` first (see
+> *Faster file transfers* below).
 
 ### 4. SD Card
 

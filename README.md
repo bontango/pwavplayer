@@ -29,7 +29,7 @@ The file `config.txt` must be placed in the root directory of the SD card. Each 
 |-----|--------|---------|-------------|
 | `dac` | `12`, `16` | `12` | DAC output bit depth |
 | `mix` | `sum`, `div2`, `sqrt` | `div2` | Mixing mode for multiple simultaneous tracks |
-| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `bg80` | GPIO event mode |
+| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80`, `by35` | `bg80` | GPIO event mode |
 | `deb` | number (ms) | `10` | Debounce time in milliseconds |
 | `rpd` | number (ms) | `60` | Rest period in milliseconds (`flat` mode only) |
 | `ser` | `none`, `uart`, `i2c` | `none` | Serial interface for sound commands |
@@ -73,6 +73,7 @@ usbbaud=921600
 | `flat0` | Like `flat`, older variant without rest period (up to rel. 0.9.1) |
 | `bw11` | Williams System 11 – binary-encoded sound bus |
 | `bg80` | Gottlieb System 1/80/80A/80B – binary-encoded sound bus |
+| `by35` | Bally -35 / Stern MPU – binary-encoded sound bus, read on external strobe (GPIO34, positive edge) |
 
 For `flat` / `flat0`: pins 1–10 trigger sound IDs 1–10. Inputs are active-low with an external 10 kΩ pull-up resistor.
 

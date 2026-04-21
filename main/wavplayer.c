@@ -167,6 +167,7 @@ void ReadConfig(char *fname) {
                 if (strcmp(val,"flat0") == 0) gconf[CONF_EVT] = CONF_EVT_FLAT0;
                 if (strcmp(val,"bw11") == 0) gconf[CONF_EVT] = CONF_EVT_BW11;
                 if (strcmp(val,"bg80") == 0) gconf[CONF_EVT] = CONF_EVT_BG80;
+                if (strcmp(val,"by35") == 0) gconf[CONF_EVT] = CONF_EVT_BY35;
             }
             if (strcmp(key,"deb") == 0) {
                 gconf[CONF_DEB] = atoi(val);

@@ -43,6 +43,7 @@ typedef struct {
 #define CONF_EVT_BW11       3   // evt=bw11
 #define CONF_EVT_BG80       4   // evt=bg80
 #define CONF_EVT_FLAT0      5   // evt=flat0 (old version)
+#define CONF_EVT_BY35       6   // evt=by35 (Bally -35, strobe-triggered)
 #define CONF_DEB        3       // debounce in ms
 #define CONF_SER        4
 #define CONF_SER_NONE       1   // ser=none

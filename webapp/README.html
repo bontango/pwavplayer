@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>README</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<h1 id="pwavplayer-config-editor--user-guide">PWAVplayer Config Editor —
+User Guide</h1>
+<p><code>PWAVplayer_config_editor.html</code> is a single-file,
+browser-based tool for configuring a PWAVplayer device, managing files
+on its SD card, and flashing firmware — all over USB from a desktop
+computer. No installation required.</p>
+<hr />
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li><strong>Browser:</strong> Chrome or Edge (desktop). The editor
+relies on the <a
+href="https://developer.mozilla.org/docs/Web/API/Web_Serial_API">Web
+Serial API</a>, which is not available in Firefox or Safari.</li>
+<li><strong>Connection:</strong> Device connected via USB (UART0 /
+built-in USB-Serial).</li>
+<li><strong>Firmware:</strong> PWAVplayer firmware running on the
+device. The <code>UsbSerial</code> task is always active — no
+configuration needed to enable it.</li>
+</ul>
+<hr />
+<h2 id="launching-the-editor">Launching the editor</h2>
+<p>Just open the HTML file in Chrome/Edge. The page works locally — no
+server or network connection is required (except for optional downloads
+from <code>lisy.dev</code>, see below).</p>
+<p>You can also host the file on any static web server and open it from
+there.</p>
+<hr />
+<h2 id="tabs">Tabs</h2>
+<h3 id="1-device">1. Device</h3>
+<p>Connect, monitor, and control the device.</p>
+<ul>
+<li><strong>Connect USB</strong> — opens the browser’s serial port
+chooser. Pick the ESP32 device and click <em>Connect</em>. After a short
+handshake the device responds with <code>OK:READY</code>.</li>
+<li><strong>Baud drop-down</strong> — must match the firmware’s
+<code>usbbaud</code> setting (default <code>115200</code>). Available:
+<code>9600</code>, <code>57600</code>, <code>115200</code>,
+<code>230400</code>, <code>460800</code>, <code>921600</code>. If the
+editor hangs on <em>Connecting…</em> for more than a few seconds, the
+two sides disagree about the baud rate.</li>
+<li><strong>USB console</strong> — low-level log of bytes exchanged with
+the device. Useful for troubleshooting.</li>
+<li><strong>Disconnect</strong> — closes the serial port. Do this before
+reflashing or sharing the port with another tool such as
+<code>idf.py monitor</code>.</li>
+</ul>
+<h3 id="2-general">2. General</h3>
+<p>Edits <code>config.txt</code> line by line via form fields. The table
+below lists the keys; defaults match the firmware’s
+<code>InitConfig()</code>.</p>
+<table>
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 25%" />
+<col style="width: 29%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Key</th>
+<th>Values</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dac</code></td>
+<td><code>12</code>, <code>16</code></td>
+<td><code>12</code></td>
+<td>DAC output bit depth</td>
+</tr>
+<tr>
+<td><code>mix</code></td>
+<td><code>sum</code>, <code>div2</code>, <code>sqrt</code></td>
+<td><code>div2</code></td>
+<td>Track mixing algorithm</td>
+</tr>
+<tr>
+<td><code>evt</code></td>
+<td><code>none</code>, <code>flat</code>, <code>flat0</code>,
+<code>bw11</code>, <code>bg80</code>, <code>by35</code></td>
+<td><code>bg80</code></td>
+<td>GPIO event mode</td>
+</tr>
+<tr>
+<td><code>deb</code></td>
+<td>milliseconds</td>
+<td><code>10</code></td>
+<td>Debounce time (GPIO edge lockout)</td>
+</tr>
+<tr>
+<td><code>rpd</code></td>
+<td>milliseconds</td>
+<td><code>60</code></td>
+<td>Rest period — <code>flat</code> mode only</td>
+</tr>
+<tr>
+<td><code>ser</code></td>
+<td><code>none</code>, <code>uart</code>, <code>i2c</code></td>
+<td><code>none</code></td>
+<td>Sound-command serial interface</td>
+</tr>
+<tr>
+<td><code>addr</code></td>
+<td>hex</td>
+<td><code>0x66</code></td>
+<td>I2C slave address, only when <code>ser=i2c</code></td>
+</tr>
+<tr>
+<td><code>usbbaud</code></td>
+<td><code>115200</code>…<code>921600</code></td>
+<td><code>115200</code></td>
+<td>UART0 baud used by <strong>this</strong> editor</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Workflow:</strong></p>
+<ol type="1">
+<li><em>File → Open</em> to load a local <code>config.txt</code>, or
+<em>File → From device</em> to download the current one from the SD
+card.</li>
+<li>Edit fields.</li>
+<li><em>File → Save to device</em> uploads the new
+<code>config.txt</code> and prompts you to reboot.</li>
+<li><em>File → Save as</em> saves a local copy.</li>
+</ol>
+<blockquote>
+<p>Changing <code>usbbaud</code> takes effect after reboot. Before you
+click <em>Connect USB</em> again, set the <strong>Baud</strong>
+drop-down on the Device tab to the same value.</p>
+</blockquote>
+<h3 id="3-soundfiles">3. Soundfiles</h3>
+<p>Manage the sound-file slots (IDs 0001–0031). The editor parses the
+<code>NNNN-AAAA-VVV-description.wav</code> naming scheme and displays
+attributes (loop, break, init/background, kill) in a table.</p>
+<ul>
+<li><strong>Refresh</strong> — re-reads the SD file list.</li>
+<li><strong>Write Soundconfig</strong> — renames files on the device so
+the filenames match the attributes you’ve set in the table.</li>
+<li>Per-row actions: <strong>Assign</strong>, play, download, rename,
+delete.</li>
+</ul>
+<h4 id="assigning-a-wav-file-to-a-sound-slot">Assigning a WAV file to a
+sound slot</h4>
+<p>The <strong>Assign</strong> button in each row is the quickest way to
+put a new WAV file into a specific slot (ID
+<code>0001</code>–<code>0031</code>). The editor takes care of naming
+and replacing any existing file in that slot.</p>
+<ol type="1">
+<li>Connect the device (<strong>Device → Connect USB</strong>) and
+switch to the <strong>Soundfiles</strong> tab.</li>
+<li>Click <strong>Refresh</strong> so the table reflects the current SD
+card contents.</li>
+<li>In the row of the desired slot, click <strong>Assign</strong>. A
+file picker opens — choose the <code>.wav</code> file from your
+computer.</li>
+<li>The editor derives the target filename from the slot ID and the
+source file’s base name, e.g. picking <code>alarm.wav</code> for slot
+<code>0005</code> produces <code>0005-xxxx-xxx-alarm.wav</code>
+(attributes default to <code>x</code> / volume <code>100</code>; edit
+them later via <em>Write Soundconfig</em>).</li>
+<li>If the slot already holds a different file, you are asked to confirm
+the replacement — the old file is deleted before the new one is
+uploaded. If the target name is identical, you are asked whether to
+overwrite.</li>
+<li>The <strong>Assign</strong> button shows upload progress
+(<code>0%</code> → <code>100%</code>). On success a toast confirms the
+new filename and the table reloads automatically.</li>
+<li>Adjust attributes (loop / break / init / background / kill / volume)
+in the table and click <strong>Write Soundconfig</strong> to rename the
+file accordingly.</li>
+</ol>
+<blockquote>
+<p>Tip: the description part of the filename is sanitized — only
+letters, digits and dashes are kept. Special characters and spaces are
+replaced with <code>-</code>.</p>
+<p>Tip: for many files at once it is faster to raise
+<code>usbbaud</code> first (see <em>Faster file transfers</em>
+below).</p>
+</blockquote>
+<h3 id="4-sd-card">4. SD Card</h3>
+<p>Generic file manager for the SD card root.</p>
+<ul>
+<li><strong>File list</strong> — name, size, modification time. The
+modification time is only meaningful if the device clock was set (the
+editor sends <code>SET:TIME=</code> automatically right after the
+handshake).</li>
+<li><strong>Upload / Download / Rename / Delete</strong> — standard
+operations, streamed over the serial protocol described in
+<code>API.md</code>.</li>
+<li><strong>Init SD Card</strong> — downloads a reference SD layout from
+<code>lisy.dev</code> and uploads it to the device. Useful for a fresh
+card. The <em>Overwrite existing</em> checkbox controls whether existing
+files are replaced.</li>
+</ul>
+<h3 id="5-firmware--flash">5. Firmware / Flash</h3>
+<p>Two independent actions:</p>
+<ul>
+<li><strong>Fetch versions / Install server firmware</strong> —
+downloads a firmware build from <code>lisy.dev</code> and places it on
+the SD card as <code>update.bin</code>. The device flashes it on the
+next boot via its built-in OTA path.</li>
+<li><strong>Flash ESP32 (browser)</strong> — full-chip flash using <a
+href="https://github.com/espressif/esptool-js">esptool-js</a>. The
+browser opens a <strong>separate</strong> serial session at 115200 baud,
+puts the chip into bootloader mode, and writes the firmware binaries
+directly. Use this for first-time provisioning or recovery.</li>
+</ul>
+<blockquote>
+<p>The browser flasher holds the serial port exclusively. Disconnect the
+editor’s USB session first, and don’t run <code>idf.py monitor</code> at
+the same time.</p>
+</blockquote>
+<hr />
+<h2 id="typical-first-time-setup">Typical first-time setup</h2>
+<ol type="1">
+<li>Build and flash firmware once with <code>idf.py build flash</code>
+(or use the browser flasher).</li>
+<li>Open the editor, click <strong>Connect USB</strong> (default baud
+<code>115200</code>).</li>
+<li>Go to <strong>SD Card → Init SD Card</strong> to lay down the
+default file layout.</li>
+<li>Switch to <strong>General</strong>, review settings, click
+<strong>File → Save to device</strong>.</li>
+<li>Reboot the device. Done.</li>
+</ol>
+<hr />
+<h2 id="faster-file-transfers">Faster file transfers</h2>
+<p>For quick transfers of many WAV files, raise
+<code>usbbaud</code>:</p>
+<ol type="1">
+<li><strong>General tab</strong> → set <code>usbbaud</code> to
+<code>921600</code> → <strong>Save to device</strong>.</li>
+<li><strong>Reboot</strong> the device (File → Reboot device).</li>
+<li><strong>Device tab</strong> → change the <em>Baud</em> drop-down to
+<code>921600</code>.</li>
+<li><strong>Connect USB</strong> again.</li>
+</ol>
+<p>To go back, reverse the steps. If you end up with a mismatch and can
+no longer connect, either: - pick the correct baud in the editor, or -
+delete <code>config.txt</code> on the SD card (via card reader) — the
+firmware will fall back to <code>115200</code>.</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<colgroup>
+<col style="width: 32%" />
+<col style="width: 50%" />
+<col style="width: 17%" />
+</colgroup>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>Connect USB</em> shows no devices</td>
+<td>Another program holds the port (<code>idf.py monitor</code>, other
+editor tab, esptool)</td>
+<td>Close the other session</td>
+</tr>
+<tr>
+<td>Connects but stays <em>Connecting…</em> and times out</td>
+<td>Baud mismatch between editor and firmware</td>
+<td>Match the <em>Baud</em> drop-down to the firmware’s
+<code>usbbaud</code></td>
+</tr>
+<tr>
+<td><code>idf.py monitor</code> shows garbage after boot</td>
+<td><code>usbbaud</code> ≠ 115200 and monitor is at 115200</td>
+<td>Either set <code>usbbaud=115200</code>, or run
+<code>idf.py monitor -B &lt;rate&gt;</code></td>
+</tr>
+<tr>
+<td>File upload stalls</td>
+<td>Weak USB cable or hub, very large file</td>
+<td>Try a direct USB port; retry</td>
+</tr>
+<tr>
+<td>Browser flasher fails</td>
+<td>Wrong chip target or port busy</td>
+<td>Verify the device resets into bootloader; disconnect other
+sessions</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="related-documents">Related documents</h2>
+<ul>
+<li><code>API.md</code> — wire-level protocol specification (commands,
+frame formats).</li>
+<li><code>../README.md</code> / <code>../LIESMICH.md</code> — project
+overview and firmware-side configuration.</li>
+</ul>
+</body>
+</html>

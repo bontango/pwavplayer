@@ -29,7 +29,7 @@ Die Datei `config.txt` muss im Wurzelverzeichnis der SD-Karte liegen. Jede Zeile
 |-----------|-------|----------|--------------|
 | `dac` | `12`, `16` | `12` | Bit-Tiefe des DAC-Ausgangs |
 | `mix` | `sum`, `div2`, `sqrt` | `div2` | Mischverfahren bei mehreren gleichzeitigen Tracks |
-| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80` | `bg80` | GPIO-Eventmodus |
+| `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80`, `by35` | `bg80` | GPIO-Eventmodus |
 | `deb` | Zahl (ms) | `10` | Entprellzeit in Millisekunden |
 | `rpd` | Zahl (ms) | `60` | Ruheperiode in Millisekunden (nur `flat`) |
 | `ser` | `none`, `uart`, `i2c` | `none` | Serielle Schnittstelle für Sound-Kommandos |
@@ -73,6 +73,7 @@ usbbaud=921600
 | `flat0` | Wie `flat`, ältere Variante ohne Ruheperiode (bis Rel. 0.9.1) |
 | `bw11` | Williams System 11 – binär codierter Sound-Bus |
 | `bg80` | Gottlieb System 1/80/80A/80B – binär codierter Sound-Bus |
+| `by35` | Bally -35 / Stern MPU – binär codierter Sound-Bus, Einlesen per externem Strobe (GPIO34, positive Flanke) |
 
 Bei `flat` / `flat0`: Pin 1–10 lösen Sound-ID 1–10 aus. Eingänge sind Active-Low mit externem 10-kΩ-Pull-up.
 

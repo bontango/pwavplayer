@@ -58,6 +58,7 @@ extern void PinEvents(void *pvParameters);
 extern void PinEvents0(void *pvParameters);
 extern void EncEventW11(void *pvParameters);
 extern void EncEventG80(void *pvParameters);
+extern void EncEventB35(void *pvParameters);
 extern StreamBufferHandle_t xpinevt;
 extern uint16_t gconf[CONF_MAX];
 
@@ -106,6 +107,9 @@ void app_main(void) {
         break;
     case CONF_EVT_BG80:
         xTaskCreatePinnedToCore(&EncEventG80, "EncEventG80", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
+        break;
+    case CONF_EVT_BY35:
+        xTaskCreatePinnedToCore(&EncEventB35, "EncEventB35", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
         break;
     default: break;
     }
