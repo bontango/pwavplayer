@@ -34,6 +34,8 @@
 #include "platform.h"
 #include "pgpio.h"
 #include "pwav.h"
+#include "wifi.h"
+#include "httpserver.h"
 
 // Firmware file name
 #define FIRMWARE_NAME "update.bin"
@@ -75,6 +77,13 @@ void app_main(void) {
     ReadConfig(fpath0);
 
     xpinevt = xStreamBufferCreate(IP_BUF_SZ,1);
+
+    // WiFi + HTTP server (runs in parallel to USB serial editor).
+    // No-op if wifi_enable=no or SSID is empty.
+    wifi_init_sta();
+    if (wifi_is_connected()) {
+        httpserver_start();
+    }
     xTaskCreatePinnedToCore(&WAVPlayer, "WAVplayer", 8192, NULL, tskIDLE_PRIORITY+10, NULL, CORE_0);
 //    xTaskCreatePinnedToCore(&WAVDummy, "WAVdummy", 4096, NULL, tskIDLE_PRIORITY+10, NULL, CORE_0);
 

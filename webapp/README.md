@@ -1,19 +1,18 @@
 # PWAVplayer Config Editor — User Guide
 
 `PWAVplayer_config_editor.html` is a single-file, browser-based tool for configuring a
-PWAVplayer device, managing files on its SD card, and flashing firmware — all over USB
-from a desktop computer. No installation required.
+PWAVplayer device, managing files on its SD card, and flashing firmware — over **USB**
+(Web Serial) or **WiFi** (HTTP REST on port 8080). No installation required.
 
 ---
 
 ## Requirements
 
-- **Browser:** Chrome or Edge (desktop). The editor relies on the
-  [Web Serial API](https://developer.mozilla.org/docs/Web/API/Web_Serial_API), which is
-  not available in Firefox or Safari.
-- **Connection:** Device connected via USB (UART0 / built-in USB-Serial).
-- **Firmware:** PWAVplayer firmware running on the device. The `UsbSerial` task is always
-  active — no configuration needed to enable it.
+- **Browser:** Chrome or Edge (desktop) for USB mode (Web Serial). Any modern browser
+  works for IP mode.
+- **Connection:** USB to the ESP32, **or** the device reachable on your LAN (WiFi STA).
+- **Firmware:** PWAVplayer firmware running. The `UsbSerial` task is always active; the
+  HTTP server starts only when `wifi_enable=yes` in `config.txt` and the device got an IP.
 
 ---
 
@@ -30,17 +29,42 @@ You can also host the file on any static web server and open it from there.
 
 ### 1. Device
 
-Connect, monitor, and control the device.
+Connect, monitor, and control the device. The **Mode** radios at the top switch between
+*USB Mode* and *IP Mode*; the selection is persisted in `localStorage`. Firmware-wise the
+two transports run in parallel — the editor just picks one.
+
+#### USB Mode
 
 - **Connect USB** — opens the browser's serial port chooser. Pick the ESP32 device and
   click *Connect*. After a short handshake the device responds with `OK:READY`.
 - **Baud drop-down** — must match the firmware's `usbbaud` setting (default `115200`).
   Available: `9600`, `57600`, `115200`, `230400`, `460800`, `921600`. If the editor hangs
   on *Connecting…* for more than a few seconds, the two sides disagree about the baud rate.
-- **USB console** — low-level log of bytes exchanged with the device. Useful for
-  troubleshooting.
 - **Disconnect** — closes the serial port. Do this before reflashing or sharing the port
   with another tool such as `idf.py monitor`.
+
+#### IP Mode
+
+- **IP Address** — enter the device's IP (no port, no scheme). The editor talks HTTP REST
+  on port 8080.
+- **Connect** — does `GET /status` with a 6-second timeout + one retry, shows the
+  firmware version, and warns if the device's `api_version` doesn't match the editor's
+  expected value.
+- The status dot goes green on success, red on timeout/mismatch.
+
+#### WiFi Status (USB only)
+
+Under *Config Transfer* there is a dedicated **WiFi Status** block with a **Get IP
+Status** button. It sends `WIFI:STATUS` over USB and reports one of: *disabled*,
+*no_ssid*, *connection failed*, or *connected* with the assigned IP and SSID. When
+connected, the IP is automatically copied into the *IP Address* field above, so you
+can switch to IP Mode without typing.
+
+### Debug tab
+
+The low-level USB protocol log (bytes/lines exchanged) has its own tab, separate from
+the Device tab. Useful for troubleshooting USB-mode issues. (IP-mode HTTP requests are
+logged here too for consistency.)
 
 ### 2. General
 
@@ -57,6 +81,9 @@ match the firmware's `InitConfig()`.
 | `ser` | `none`, `uart`, `i2c` | `none` | Sound-command serial interface |
 | `addr` | hex | `0x66` | I2C slave address, only when `ser=i2c` |
 | `usbbaud` | `115200`…`921600` | `115200` | UART0 baud used by **this** editor |
+| `wifi_enable` | `yes`, `no` | `no` | Enable WiFi STA + HTTP server on port 8080 |
+| `wifi_ssid` | string | *(empty)* | WiFi SSID |
+| `wifi_pwd` | string | *(empty)* | WiFi password |
 
 **Workflow:**
 
@@ -179,5 +206,5 @@ either:
 
 ## Related documents
 
-- `API.md` — wire-level protocol specification (commands, frame formats).
+- `API.md` — wire-level protocol specification for both USB frames and HTTP REST.
 - `../README.md` / `../LIESMICH.md` — project overview and firmware-side configuration.

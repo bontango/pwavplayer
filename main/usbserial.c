@@ -33,8 +33,11 @@
 #include "pgpio.h"
 #include "pwav.h"
 #include "cmdapi.h"
+#include "wifi.h"
 
 extern StreamBufferHandle_t xpinevt;
+extern uint16_t gconf[CONF_MAX];
+extern char gwifi_ssid[];
 
 static const char *TAG = "USB";
 
@@ -371,6 +374,28 @@ void UsbSerial(void *pvParameters) {
                         ESP_LOGI(TAG, "System time set to %ld", t);
                     }
                     usb_tx("OK:TIME_SET\r\n");
+                }
+                // ---- WIFI:STATUS ----
+                else if (strcmp(line, "WIFI:STATUS") == 0) {
+                    char resp[96];
+                    if (!gconf[CONF_WIFI_ENABLE]) {
+                        snprintf(resp, sizeof(resp), "OK:WIFI_STATUS=disabled\r\n");
+                    } else if (gwifi_ssid[0] == '\0') {
+                        snprintf(resp, sizeof(resp), "OK:WIFI_STATUS=no_ssid\r\n");
+                    } else if (wifi_is_connected()) {
+                        char ip[20] = {0};
+                        if (wifi_get_ip_str(ip, sizeof(ip)) == ESP_OK && ip[0]) {
+                            snprintf(resp, sizeof(resp),
+                                     "OK:WIFI_STATUS=connected,ip=%s,ssid=%s\r\n", ip, gwifi_ssid);
+                        } else {
+                            snprintf(resp, sizeof(resp),
+                                     "OK:WIFI_STATUS=connected,ssid=%s\r\n", gwifi_ssid);
+                        }
+                    } else {
+                        snprintf(resp, sizeof(resp),
+                                 "OK:WIFI_STATUS=disconnected,ssid=%s\r\n", gwifi_ssid);
+                    }
+                    usb_tx(resp);
                 }
                 // ---- REBOOT ----
                 else if (strcmp(line, "REBOOT") == 0) {

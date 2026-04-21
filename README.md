@@ -13,6 +13,7 @@ A polyphonic WAV file player for ESP32 microcontrollers, designed for use in pin
 - **GPIO events**: Up to 10 input pins trigger sound playback (directly or binary-encoded for Williams System 11 / Gottlieb System 1/80/80A/80B).
 - **Serial control**: Sounds can be triggered via UART or I2C (slave).
 - **USB Config Editor**: Browser-based editor (`webapp/`) for managing the SD card and configuration over USB (Chrome/Edge).
+- **WiFi / HTTP access (optional)**: The same editor can also talk to the device over WiFi (HTTP REST on port 8080), in parallel to USB. STA-mode only, credentials in `config.txt`.
 - **File attributes**: Individual WAV files can be configured as loop, background sound, init sound, or with kill behavior.
 - **Sound groups**: Multiple sounds can be combined into a group from which one is selected randomly or sequentially.
 - **Firmware update**: New firmware can be placed as `update.bin` on the SD card and is automatically flashed on the next boot.
@@ -35,6 +36,9 @@ The file `config.txt` must be placed in the root directory of the SD card. Each 
 | `ser` | `none`, `uart`, `i2c` | `none` | Serial interface for sound commands |
 | `addr` | hex value | `0x66` | I2C slave address (only when `ser=i2c`) |
 | `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baud rate of the USB config-editor port (UART0) |
+| `wifi_enable` | `yes`, `no` | `no` | Enables STA-mode WiFi and the HTTP server on port 8080 |
+| `wifi_ssid` | string | *(empty)* | WiFi network SSID — required if `wifi_enable=yes` |
+| `wifi_pwd` | string | *(empty)* | WiFi password |
 
 **Example:**
 ```
@@ -45,6 +49,9 @@ deb=10
 rpd=40
 ser=uart
 usbbaud=921600
+wifi_enable=yes
+wifi_ssid=MyNetwork
+wifi_pwd=secret
 ```
 
 > **Note:** If `config.txt` is missing, the firmware starts with the default values above.
@@ -181,25 +188,29 @@ On the next boot, the device checks whether the file is present and valid, flash
 
 ---
 
-## USB Config Editor
+## Config Editor (USB or WiFi)
 
-The directory `webapp/` contains `PWAVplayer_config_editor.html` — a browser-based editor for Chrome or Edge (desktop).
+The directory `webapp/` contains `PWAVplayer_config_editor.html` — a browser-based editor for Chrome or Edge (desktop). It can talk to the device over **USB** (Web Serial) or over **WiFi** (HTTP REST on port 8080). The mode is chosen in the Device tab; both transports run in parallel on the firmware side.
 
 ### Features
 
-- **Configuration**: Edit `config.txt`, upload it to the device or download it
+- **Configuration**: Edit `config.txt`, upload it to the device or download it (incl. WiFi settings in the *General* tab)
 - **SD card**: View file list (name, size, date), download, rename, and delete files
 - **Firmware update**: Transfer a local `.bin` file as `update.bin` to the SD card; full flash utility via esptool-js (browser USB)
 - **Default configuration**: Load a default `config.txt` from lisy.dev
+- **WiFi status (USB)**: The *Device* tab has a **Get IP Status** button that queries the device over USB and copies the assigned IP into the IP-mode address field
+- **Debug tab**: Low-level USB protocol log, moved out of the Device tab
 
 ### Requirements
 
-- Chrome or Edge (desktop) — Web Serial API required
-- ESP32 connected via USB
-- Firmware running (`UsbSerial` task active)
+- Chrome or Edge (desktop) — Web Serial API required for USB mode
+- ESP32 connected via USB, or reachable on the LAN (WiFi STA)
+- Firmware running (`UsbSerial` task is always active; HTTP server starts only when `wifi_enable=yes` and the device got an IP)
 
-### Protocol
+### Protocols
 
-Communication uses `UART_NUM_0` with a frame-based text protocol. The baud rate is
-configurable via the `usbbaud` key in `config.txt` (default `115200`). See
-`webapp/API.md` for protocol details and `webapp/README.md` for operating instructions.
+- **USB**: frame-based text protocol on `UART_NUM_0`; baud rate from `usbbaud` (default `115200`).
+- **HTTP**: REST on port 8080, CORS-enabled, no authentication (designed for a trusted LAN).
+
+See `webapp/API.md` for wire-level details of both transports and `webapp/README.md` for
+operating instructions.

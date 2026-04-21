@@ -121,7 +121,7 @@
 <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-dark bg-dark px-3 py-2">
   <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
-    <small class="text-secondary fw-normal">v1.03</small>
+    <small class="text-secondary fw-normal">v1.04</small>
   </span>
   <span id="currentFileName" class="text-secondary text-truncate mx-auto"
         style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
@@ -150,6 +150,9 @@
     <li class="nav-item" role="presentation">
       <a class="nav-link" data-bs-toggle="tab" href="#tabUpdate" role="tab">Update</a>
     </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" data-bs-toggle="tab" href="#tabDebug" role="tab">Debug</a>
+    </li>
   </ul>
 
   <div class="tab-content bg-white border border-top-0 rounded-bottom p-3">
@@ -161,8 +164,24 @@
 
       <div class="row g-3">
 
-        <!-- USB Connection -->
+        <!-- Connection Mode -->
         <div class="col-12">
+          <h6>Connection Mode</h6>
+          <div class="d-flex gap-3 align-items-center flex-wrap mb-2">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="devMode" id="devModeUSB" value="usb" checked onchange="setDeviceMode('usb')">
+              <label class="form-check-label" for="devModeUSB">USB Mode</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="devMode" id="devModeIP" value="ip" onchange="setDeviceMode('ip')">
+              <label class="form-check-label" for="devModeIP">IP Mode</label>
+            </div>
+            <span class="small text-muted" id="fwVersionInfo">Not connected.</span>
+          </div>
+        </div>
+
+        <!-- USB Connection Panel -->
+        <div class="col-12" id="usbConnectPanel">
           <h6>USB Connection</h6>
           <div id="usb-wrapper" class="border rounded">
             <div id="usb-header">
@@ -182,8 +201,26 @@
                 </select>
               </label>
             </div>
-            <div id="usb-console"></div>
           </div>
+          <small class="text-muted">Protocol log is in the Debug tab.</small>
+        </div>
+
+        <!-- IP Connection Panel -->
+        <div class="col-12 d-none" id="ipConnectPanel">
+          <h6>IP Connection</h6>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4 col-sm-6">
+              <label class="form-label form-label-sm mb-1">IP Address</label>
+              <input type="text" class="form-control form-control-sm font-monospace" id="ipAddr" placeholder="e.g. 192.168.1.100">
+            </div>
+            <div class="col-auto d-flex gap-2 align-items-end">
+              <button class="btn btn-outline-primary btn-sm" id="btnIpConnect" onclick="ipConnect()">Connect</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnIpDisconnect" onclick="ipDisconnect()" disabled>Disconnect</button>
+              <span class="usb-status-dot" id="ip-status-dot"></span>
+              <span class="small" id="ip-status-text">Disconnected</span>
+            </div>
+          </div>
+          <small class="text-muted">HTTP REST on port 8080. Requires <code>wifi_enable=yes</code> and a valid SSID/password in config.txt.</small>
         </div>
 
         <!-- Config Transfer -->
@@ -193,6 +230,15 @@
             <button class="btn btn-success btn-sm"           id="btn-ul-config"  onclick="uploadConfig()"           disabled>&#8593; Upload Config to Device</button>
             <button class="btn btn-outline-success btn-sm"   id="btn-dl-config"  onclick="downloadConfig()"         disabled>&#8595; Download Config from Device</button>
             <button class="btn btn-outline-secondary btn-sm"                     onclick="downloadDefaultConfig()">&#8681; Download default config</button>
+          </div>
+        </div>
+
+        <!-- WiFi Status (USB) -->
+        <div class="col-12">
+          <h6>WiFi Status</h6>
+          <div class="d-flex gap-2 flex-wrap align-items-center">
+            <button class="btn btn-outline-info btn-sm" id="btn-wifi-status" onclick="getWifiStatus()" disabled>&#128712; Get IP Status</button>
+            <span id="wifi-status-text" class="small text-muted"></span>
           </div>
         </div>
 
@@ -344,6 +390,43 @@
             </div>
           </div>
 
+          <hr class="my-3">
+          <h6 class="mt-2">WiFi Settings</h6>
+
+          <!-- wifi_enable -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">wifi_enable</label>
+            <div class="col-sm-8">
+              <div class="form-check form-switch">
+                <input type="checkbox" class="form-check-input" id="cfg-wifi-enable">
+                <label class="form-check-label small" for="cfg-wifi-enable">Enable WiFi (STA mode) and HTTP config server on port 8080</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- wifi_ssid -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">wifi_ssid</label>
+            <div class="col-sm-8">
+              <input type="text" class="form-control form-control-sm" id="cfg-wifi-ssid"
+                     placeholder="WiFi network name" autocomplete="off" maxlength="64" style="max-width:320px;">
+              <div class="form-text">SSID of the WiFi network to join.</div>
+            </div>
+          </div>
+
+          <!-- wifi_pwd -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">wifi_pwd</label>
+            <div class="col-sm-8">
+              <div class="input-group input-group-sm" style="max-width:320px;">
+                <input type="password" class="form-control form-control-sm" id="cfg-wifi-pwd"
+                       placeholder="WiFi password" autocomplete="new-password" maxlength="64">
+                <button class="btn btn-outline-secondary" type="button" onclick="wifiTogglePwd()">Show</button>
+              </div>
+              <div class="form-text">Stored in clear text in <code>config.txt</code>.</div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -456,6 +539,23 @@
 
       </div>
     </div><!-- /tabUpdate -->
+
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TAB: DEBUG
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tabDebug" role="tabpanel">
+      <h5 class="mb-3">Protocol Log</h5>
+      <p class="small text-muted mb-2">
+        Shows raw USB serial traffic and HTTP client activity.
+      </p>
+      <div class="border rounded" style="background:#080c0a;">
+        <div id="usb-console"></div>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('usb-console').innerHTML=''">Clear</button>
+      </div>
+    </div><!-- /tabDebug -->
 
   </div><!-- /tab-content -->
 </div><!-- /container -->
@@ -584,6 +684,7 @@ async function usbConnect() {
     usb_handshakeDone = true;
     setStatus('connected');
     setDeviceButtons(true);
+    updateFwVersionInfo();
     showToast('Connected to PWAVplayer', 'success');
     // Sync device clock so file uploads get correct timestamps
     try { await usbSendCmd('SET:TIME=' + Math.floor(Date.now() / 1000), 3000); } catch(_) {}
@@ -605,6 +706,7 @@ async function usbDisconnect() {
   } catch (e) {}
   setStatus('disconnected');
   setDeviceButtons(false);
+  updateFwVersionInfo();
   usbLog('Disconnected', 'sys');
 }
 
@@ -776,6 +878,11 @@ function usbReceiveTextFrame(ms = 30000) {
 
 async function downloadConfig() {
   if (!checkConnected()) return;
+  if (net.mode === 'ip') {
+    try { await httpDownloadConfig(); showToast('Config downloaded from device', 'success'); }
+    catch (e) { usbLog('Download failed: ' + e.message, 'err'); showToast('Config download failed: ' + e.message, 'danger'); }
+    return;
+  }
   usbLog('Downloading config.txt…', 'sys');
   try {
     const fp = usbReceiveBinaryFrame(20000);
@@ -813,6 +920,11 @@ async function downloadDefaultConfig() {
 
 async function uploadConfig() {
   if (!checkConnected()) return;
+  if (net.mode === 'ip') {
+    try { await httpUploadConfig(); showToast('Config uploaded to device', 'success'); }
+    catch (e) { usbLog('Upload failed: ' + e.message, 'err'); showToast('Config upload failed: ' + e.message, 'danger'); }
+    return;
+  }
   const text = generateConfig();
   usbLog('Uploading config.txt…', 'sys');
   try {
@@ -833,6 +945,11 @@ async function uploadConfig() {
 async function rebootDevice() {
   if (!checkConnected()) return;
   if (!await askConfirm('Reboot the PWAVplayer device?', { okText: 'Reboot', okClass: 'btn-warning' })) return;
+  if (net.mode === 'ip') {
+    try { await httpReboot(); showToast('Reboot command sent. Device is restarting…', 'success'); }
+    catch (e) { usbLog('Reboot error: ' + e.message, 'err'); showToast('Reboot failed: ' + e.message, 'danger'); }
+    return;
+  }
   try {
     await usbWriteText('REBOOT\r\n');
     usbLog('>> REBOOT', 'tx');
@@ -840,6 +957,65 @@ async function rebootDevice() {
   } catch (e) {
     usbLog('Reboot error: ' + e.message, 'err');
   }
+}
+
+async function getWifiStatus() {
+  if (!isConnected) {
+    showToast('Connect via USB first', 'warning');
+    return;
+  }
+  const out = document.getElementById('wifi-status-text');
+  if (out) { out.className = 'small text-muted mt-1'; out.textContent = 'Querying device…'; }
+  let line;
+  try {
+    line = await usbSendCmd('WIFI:STATUS', 6000);
+  } catch (e) {
+    usbLog('WIFI:STATUS error: ' + e.message, 'err');
+    if (out) { out.className = 'small text-danger mt-1'; out.textContent = 'Query failed: ' + e.message; }
+    showToast('WiFi status query failed: ' + e.message, 'danger');
+    return;
+  }
+  // line looks like: OK:WIFI_STATUS=connected,ip=1.2.3.4,ssid=foo
+  const m = /^OK:WIFI_STATUS=(.+)$/.exec(line || '');
+  if (!m) {
+    if (out) { out.className = 'small text-danger mt-1'; out.textContent = 'Unexpected reply: ' + line; }
+    return;
+  }
+  const parts = m[1].split(',');
+  const state = parts.shift();
+  const kv = {};
+  for (const p of parts) {
+    const i = p.indexOf('=');
+    if (i > 0) kv[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+  }
+  let msg = '', cls = 'small mt-1';
+  switch (state) {
+    case 'disabled':
+      msg = 'WiFi: not enabled (set wifi_enable=yes in General tab and reboot)';
+      cls += ' text-warning'; break;
+    case 'no_ssid':
+      msg = 'WiFi: enabled but no SSID configured';
+      cls += ' text-warning'; break;
+    case 'disconnected':
+      msg = 'WiFi: connection failed / not associated' + (kv.ssid ? ' (SSID: ' + kv.ssid + ')' : '');
+      cls += ' text-danger'; break;
+    case 'connected':
+      msg = 'WiFi: connected' + (kv.ssid ? ' to "' + kv.ssid + '"' : '') + (kv.ip ? ' — IP: ' + kv.ip : ' (no IP)');
+      cls += ' text-success';
+      if (kv.ip) {
+        const ipField = document.getElementById('ipAddr');
+        if (ipField) {
+          ipField.value = kv.ip;
+          try { localStorage.setItem('pwavplayer_ip', kv.ip); } catch (_) {}
+          showToast('IP ' + kv.ip + ' copied to IP Address field', 'success');
+        }
+      }
+      break;
+    default:
+      msg = 'WiFi: ' + m[1];
+      cls += ' text-muted';
+  }
+  if (out) { out.className = cls; out.textContent = msg; }
 }
 
 async function usbUploadFile(filename, bytes, onProgress) {
@@ -884,9 +1060,9 @@ async function uploadFileToDevice(file) {
   usbLog('Uploading: ' + file.name + ' (' + bytes.length + ' bytes)', 'sys');
 
   try {
-    const resp = await usbUploadFile(file.name, bytes, (pct) => {
-      barEl.style.width = pct + '%';
-    });
+    const resp = await (net.mode === 'ip'
+      ? httpUploadFile(file.name, bytes, (pct) => { barEl.style.width = pct + '%'; })
+      : usbUploadFile(file.name, bytes, (pct) => { barEl.style.width = pct + '%'; }));
     usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
     showToast(resp.startsWith('OK:') ? 'File "' + file.name + '" uploaded' : 'Upload failed: ' + resp,
               resp.startsWith('OK:') ? 'success' : 'danger');
@@ -903,6 +1079,11 @@ async function listFiles() {
   if (!checkConnected()) return;
   const container = document.getElementById('files-container');
   container.textContent = 'Loading…';
+  if (net.mode === 'ip') {
+    try { renderFileList(container, await httpListFiles()); }
+    catch (e) { container.textContent = 'Error: ' + e.message; showToast('Failed to list files: ' + e.message, 'danger'); }
+    return;
+  }
   usbLog('Requesting file list…', 'sys');
   try {
     const fp = usbReceiveTextFrame(15000);
@@ -961,6 +1142,19 @@ async function downloadSdFile(name, ev) {
   const btn = ev && ev.currentTarget ? ev.currentTarget : null;
   const origHtml = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.textContent = '0%'; }
+  if (net.mode === 'ip') {
+    try {
+      const data = await httpDownloadFile(name, (pct) => { if (btn) btn.textContent = pct + '%'; });
+      const blob = new Blob([data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { showToast('Download failed: ' + e.message, 'danger'); usbLog('Download failed: ' + e.message, 'err'); }
+    finally { if (btn) { btn.innerHTML = origHtml; btn.disabled = false; } }
+    return;
+  }
   usbLog('Downloading: ' + name, 'sys');
   try {
     const fp = usbReceiveBinaryFrame(60000, (recv, total) => {
@@ -990,7 +1184,9 @@ async function renameFile(oldName) {
   if (!newName || newName === oldName) return;
   if (!checkConnected()) return;
   try {
-    const resp = await usbSendCmd('FILE:RENAME=' + oldName + ',' + newName, 5000);
+    const resp = (net.mode === 'ip')
+      ? await httpRenameFile(oldName, newName)
+      : await usbSendCmd('FILE:RENAME=' + oldName + ',' + newName, 5000);
     if (resp.startsWith('OK:')) {
       showToast('Renamed "' + oldName + '" to "' + newName + '".', 'success');
       listFiles();
@@ -1006,7 +1202,9 @@ async function deleteFile(name) {
   if (!await askConfirm('Delete "' + name + '"?', { okText: 'Delete', okClass: 'btn-danger' })) return;
   if (!checkConnected()) return;
   try {
-    const resp = await usbSendCmd('FILE:DELETE=' + name, 5000);
+    const resp = (net.mode === 'ip')
+      ? await httpDeleteFile(name)
+      : await usbSendCmd('FILE:DELETE=' + name, 5000);
     if (resp.startsWith('OK:')) {
       showToast('Deleted "' + name + '".', 'success');
       listFiles();
@@ -1112,7 +1310,7 @@ function renderSoundfileRows(files) {
     tr.dataset.originalName = active ? entry.originalName : '';
     if (!active) tr.classList.add('text-muted');
     tr.innerHTML =
-      `<td><button class="btn btn-outline-primary btn-sm sf-assign" onclick="assignSoundfile(${id})"${isConnected ? '' : ' disabled'}>Assign</button></td>` +
+      `<td><button class="btn btn-outline-primary btn-sm sf-assign" onclick="assignSoundfile(${id})"${checkConnectedSilent() ? '' : ' disabled'}>Assign</button></td>` +
       `<td class="font-monospace small">${sfPad4(id)}</td>` +
       `<td>${sfAttrSelect(id, 0, p.a1, !active)}</td>` +
       `<td>${sfAttrSelect(id, 1, p.a2, !active)}</td>` +
@@ -1129,6 +1327,16 @@ async function loadSoundfiles() {
   if (!checkConnected()) return;
   const status = document.getElementById('sf-status');
   status.textContent = 'Loading…';
+  if (net.mode === 'ip') {
+    try {
+      const files = await httpListFiles();
+      renderSoundfileRows(files);
+      sfLoaded = true;
+      const n = files.filter(f => parseSoundfileName(typeof f === 'string' ? f : f.name)).length;
+      status.textContent = n + ' soundfile(s) found.';
+    } catch (e) { status.textContent = 'Error: ' + e.message; showToast('Failed to load soundfiles: ' + e.message, 'danger'); }
+    return;
+  }
   usbLog('Requesting file list (soundfiles)…', 'sys');
   try {
     const fp = usbReceiveTextFrame(15000);
@@ -1178,6 +1386,19 @@ async function playSoundfile(id) {
   const origHtml = btn ? btn.innerHTML : '';
   const setPct = pct => { if (btn) btn.textContent = pct + '%'; };
   if (btn) { btn.disabled = true; setPct(0); }
+  if (net.mode === 'ip') {
+    try {
+      const data = await httpDownloadFile(name, (pct) => setPct(pct));
+      setPct(100);
+      if (sfAudio) { try { sfAudio.pause(); } catch(_){} try { URL.revokeObjectURL(sfAudio.src); } catch(_){} }
+      const url = URL.createObjectURL(new Blob([data], { type: 'audio/wav' }));
+      sfAudio = new Audio(url);
+      sfAudio.addEventListener('ended', () => { try { URL.revokeObjectURL(url); } catch(_){} });
+      sfAudio.play().catch(err => showToast('Playback failed: ' + err.message, 'danger'));
+    } catch (e) { showToast('Play failed: ' + e.message, 'danger'); usbLog('Play failed: ' + e.message, 'err'); }
+    finally { if (btn) { btn.innerHTML = origHtml; btn.disabled = false; } }
+    return;
+  }
   usbLog('Play soundfile: ' + name, 'sys');
   try {
     const fp = usbReceiveBinaryFrame(60000, (recv, total) => {
@@ -1247,7 +1468,9 @@ async function assignSoundfile(id) {
       if (original && original !== target) {
         usbLog('Deleting old file: ' + original, 'sys');
         try {
-          const delResp = await usbSendCmd('FILE:DELETE=' + original, 5000);
+          const delResp = (net.mode === 'ip')
+            ? await httpDeleteFile(original)
+            : await usbSendCmd('FILE:DELETE=' + original, 5000);
           if (!delResp.startsWith('OK:')) {
             usbLog('Delete failed: ' + delResp, 'err');
             showToast('Could not delete old file: ' + delResp, 'warning');
@@ -1259,9 +1482,9 @@ async function assignSoundfile(id) {
 
       const bytes = new Uint8Array(await file.arrayBuffer());
       usbLog('Assigning "' + file.name + '" (' + bytes.length + ' bytes) as ' + target, 'sys');
-      const resp = await usbUploadFile(target, bytes, (pct) => {
-        if (btn) btn.textContent = pct + '%';
-      });
+      const resp = (net.mode === 'ip')
+        ? await httpUploadFile(target, bytes, (pct) => { if (btn) btn.textContent = pct + '%'; })
+        : await usbUploadFile(target, bytes, (pct) => { if (btn) btn.textContent = pct + '%'; });
       usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
       if (resp.startsWith('OK:')) {
         showToast('Assigned "' + target + '"', 'success');
@@ -1299,7 +1522,9 @@ async function writeSoundconfig() {
   let ok = 0, fail = 0;
   for (const r of renames) {
     try {
-      const resp = await usbSendCmd('FILE:RENAME=' + r.original + ',' + r.target, 5000);
+      const resp = (net.mode === 'ip')
+        ? await httpRenameFile(r.original, r.target)
+        : await usbSendCmd('FILE:RENAME=' + r.original + ',' + r.target, 5000);
       if (resp.startsWith('OK:')) {
         r.tr.dataset.originalName = r.target;
         ok++;
@@ -1334,7 +1559,7 @@ async function clockUpdateFirmware() {
   const serverUrl = sel ? sel.value : '';
 
   if (serverUrl) {
-    // Download from server, then upload via USB as update.bin
+    // Download from server, then upload to device as update.bin
     const statusEl = document.getElementById('clockUpdateStatus');
     statusEl.textContent = 'Downloading firmware…';
     try {
@@ -1344,6 +1569,12 @@ async function clockUpdateFirmware() {
       statusEl.textContent = 'Uploading to device…';
       if (!checkConnected()) { statusEl.textContent = 'Not connected'; return; }
       const bytes = new Uint8Array(buf);
+      if (net.mode === 'ip') {
+        await httpUpdateFirmware(bytes, (pct) => { statusEl.textContent = 'Uploading to device… ' + pct + '%'; });
+        statusEl.textContent = 'Uploaded — rebooting…';
+        showToast('Firmware uploaded. Device is rebooting…', 'success');
+        return;
+      }
       await usbWriteText('FILE:UPLOAD=update.bin\r\n');
       usbLog('>> FILE:UPLOAD=update.bin (' + bytes.length + ' bytes)', 'tx');
       await usbSleep(80);
@@ -1376,6 +1607,12 @@ async function clockUpdateFirmware() {
   statusEl.textContent = 'Uploading…';
   try {
     const buf = await file.arrayBuffer();
+    if (net.mode === 'ip') {
+      await httpUpdateFirmware(new Uint8Array(buf), (pct) => { statusEl.textContent = 'Uploading… ' + pct + '%'; });
+      statusEl.textContent = 'Uploaded — rebooting…';
+      showToast('Firmware uploaded. Device is rebooting…', 'success');
+      return;
+    }
     await usbWriteText('FILE:UPLOAD=update.bin\r\n');
     usbLog('>> FILE:UPLOAD=update.bin', 'tx');
     await usbSleep(80);
@@ -1560,6 +1797,15 @@ function parseConfig(text) {
   if (v.ser  !== undefined) { setSelectVal('cfg-ser', v.ser); onSerChange(); }
   if (v.addr !== undefined) document.getElementById('cfg-addr').value = v.addr;
   if (v.usbbaud !== undefined) setSelectVal('cfg-usbbaud', v.usbbaud);
+  const wEn = document.getElementById('cfg-wifi-enable');
+  if (wEn && v.wifi_enable !== undefined) {
+    const s = String(v.wifi_enable).toLowerCase().trim();
+    wEn.checked = (s === 'yes' || s === 'on' || s === '1' || s === 'true');
+  }
+  const wSsid = document.getElementById('cfg-wifi-ssid');
+  if (wSsid && v.wifi_ssid !== undefined) wSsid.value = v.wifi_ssid.replace(/^"(.*)"$/, '$1');
+  const wPwd = document.getElementById('cfg-wifi-pwd');
+  if (wPwd && v.wifi_pwd !== undefined) wPwd.value = v.wifi_pwd.replace(/^"(.*)"$/, '$1');
 }
 
 function generateConfig() {
@@ -1574,6 +1820,12 @@ function generateConfig() {
   let s = `dac=${dac}\nmix=${mix}\nevt=${evt}\ndeb=${deb}\nrpd=${rpd}\nser=${ser}\n`;
   if (ser === 'i2c') s += `addr=${addr}\n`;
   s += `usbbaud=${usbbaud}\n`;
+  const wEn  = document.getElementById('cfg-wifi-enable');
+  const wSsid= document.getElementById('cfg-wifi-ssid');
+  const wPwd = document.getElementById('cfg-wifi-pwd');
+  s += `wifi_enable=${wEn && wEn.checked ? 'yes' : 'no'}\n`;
+  s += `wifi_ssid=${wSsid ? wSsid.value : ''}\n`;
+  s += `wifi_pwd=${wPwd ? wPwd.value : ''}\n`;
   return s;
 }
 
@@ -1605,6 +1857,9 @@ function applyDefaults() {
   setSelectVal('cfg-ser', d.ser); onSerChange();
   document.getElementById('cfg-addr').value = d.addr;
   setSelectVal('cfg-usbbaud', d.usbbaud);
+  const wEn = document.getElementById('cfg-wifi-enable');  if (wEn) wEn.checked = false;
+  const wSsid = document.getElementById('cfg-wifi-ssid');  if (wSsid) wSsid.value = '';
+  const wPwd = document.getElementById('cfg-wifi-pwd');    if (wPwd) wPwd.value = '';
 }
 
 document.getElementById('btnNew').addEventListener('click', async () => {
@@ -1672,11 +1927,16 @@ async function initSdCard() {
     sdLog('Reading SD card file list\u2026');
     const existingNames = new Set();
     try {
-      const framePromise = usbReceiveTextFrame(15000);
-      await usbWriteText('FILE:LIST\r\n');
-      const jsonText = await framePromise;
-      const data = JSON.parse(jsonText);
-      for (const f of (data.files || [])) existingNames.add(f.name);
+      if (net.mode === 'ip') {
+        const files = await httpListFiles();
+        for (const f of files) existingNames.add(typeof f === 'string' ? f : f.name);
+      } else {
+        const framePromise = usbReceiveTextFrame(15000);
+        await usbWriteText('FILE:LIST\r\n');
+        const jsonText = await framePromise;
+        const data = JSON.parse(jsonText);
+        for (const f of (data.files || [])) existingNames.add(f.name);
+      }
       sdLog('SD card has ' + existingNames.size + ' existing file(s).');
     } catch (e) {
       sdLog('Warning: could not read SD file list (' + e.message + ') \u2014 will upload all.', '#ffaa00');
@@ -1701,7 +1961,9 @@ async function initSdCard() {
 
       sdLog('  upload ' + name + ' (' + buf.byteLength + ' bytes)\u2026');
       try {
-        const resp = await usbUploadFile(name, new Uint8Array(buf));
+        const resp = (net.mode === 'ip')
+          ? await httpUploadFile(name, new Uint8Array(buf))
+          : await usbUploadFile(name, new Uint8Array(buf));
         if (!resp || !resp.startsWith('OK:')) throw new Error(resp || 'no response');
         sdLog('    OK  ' + name, '#00cc66');
       } catch (e) {
@@ -1822,6 +2084,8 @@ function setDeviceButtons(on) {
     document.getElementById(id).disabled = !on;
   });
   document.getElementById('btn-ul-config').disabled = !(on && configLoaded);
+  const bws = document.getElementById('btn-wifi-status');
+  if (bws) bws.disabled = !isConnected;
   if (!on) {
     sfLoaded = false;
     const tb = document.getElementById('sf-tbody');
@@ -1832,9 +2096,278 @@ function setDeviceButtons(on) {
 }
 
 function checkConnected() {
-  if (!isConnected) { showToast('Please connect to the device first (Device tab)', 'warning'); return false; }
+  const ok = (net.mode === 'ip') ? net.connected : isConnected;
+  if (!ok) { showToast('Please connect to the device first (Device tab)', 'warning'); return false; }
   return true;
 }
+
+// ─── IP / HTTP transport ──────────────────────────────────────────────────────
+const EXPECTED_API_VERSION = 1;
+const net = { mode: 'usb', base: '', connected: false, apiVersion: null, fwVersion: null };
+
+function netBase() { return net.base; }
+
+async function netFetch(path, opts, timeoutMs) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs || 15000);
+  try {
+    return await fetch(netBase() + path, Object.assign({ signal: ac.signal }, opts || {}));
+  } finally { clearTimeout(t); }
+}
+
+async function netStatus(ip, timeoutMs) {
+  const base = 'http://' + ip + ':8080';
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs || 6000);
+  try {
+    const r = await fetch(base + '/status', { signal: ac.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+
+function setDeviceMode(mode) {
+  net.mode = mode;
+  try { localStorage.setItem('pwavplayer_mode', mode); } catch(_){}
+  const usbPanel = document.getElementById('usbConnectPanel');
+  const ipPanel  = document.getElementById('ipConnectPanel');
+  if (mode === 'ip') {
+    usbPanel.classList.add('d-none');
+    ipPanel.classList.remove('d-none');
+    const r = document.getElementById('devModeIP'); if (r) r.checked = true;
+  } else {
+    ipPanel.classList.add('d-none');
+    usbPanel.classList.remove('d-none');
+    const r = document.getElementById('devModeUSB'); if (r) r.checked = true;
+  }
+  updateFwVersionInfo();
+  setDeviceButtons(checkConnectedSilent());
+}
+
+function checkConnectedSilent() {
+  return (net.mode === 'ip') ? net.connected : isConnected;
+}
+
+function updateFwVersionInfo() {
+  const el = document.getElementById('fwVersionInfo');
+  if (!el) return;
+  if (net.mode === 'ip' && net.connected) {
+    el.textContent = 'Firmware v' + (net.fwVersion || '?') + ' (API ' + (net.apiVersion || '?') + ')';
+  } else if (net.mode === 'usb' && isConnected) {
+    el.textContent = 'USB connected.';
+  } else {
+    el.textContent = 'Not connected.';
+  }
+}
+
+function setIpStatus(state) {
+  const dot = document.getElementById('ip-status-dot');
+  const txt = document.getElementById('ip-status-text');
+  if (!dot || !txt) return;
+  dot.className = 'usb-status-dot' + (state === 'connected' ? ' connected' : state === 'handshaking' ? ' handshaking' : '');
+  txt.textContent = { disconnected:'Disconnected', handshaking:'Connecting…', connected:'Connected' }[state] || state;
+  document.getElementById('btnIpConnect').disabled    = state !== 'disconnected';
+  document.getElementById('btnIpDisconnect').disabled = state === 'disconnected';
+}
+
+async function ipConnect() {
+  const ip = (document.getElementById('ipAddr').value || '').trim();
+  if (!ip) { showToast('Enter device IP address.', 'warning'); return; }
+  try { localStorage.setItem('pwavplayer_ip', ip); } catch(_){}
+  setIpStatus('handshaking');
+  usbLog('IP connect → ' + ip + ':8080', 'sys');
+  try {
+    let s;
+    try { s = await netStatus(ip, 6000); }
+    catch (_) { s = await netStatus(ip, 6000); }
+    net.base = 'http://' + ip + ':8080';
+    net.connected = true;
+    net.apiVersion = s.api_version || s.apiVersion || null;
+    net.fwVersion = s.version || null;
+    setIpStatus('connected');
+    updateFwVersionInfo();
+    setDeviceButtons(true);
+    usbLog('Device: fw=' + net.fwVersion + ' api=' + net.apiVersion, 'rx');
+    if (net.apiVersion && net.apiVersion !== EXPECTED_API_VERSION) {
+      showToast('API version mismatch: device=' + net.apiVersion + ' editor=' + EXPECTED_API_VERSION, 'warning');
+    } else {
+      showToast('Connected to ' + ip, 'success');
+    }
+  } catch (e) {
+    net.connected = false;
+    setIpStatus('disconnected');
+    updateFwVersionInfo();
+    setDeviceButtons(false);
+    usbLog('IP connect failed: ' + e.message, 'err');
+    showToast('Connect failed: ' + e.message, 'danger');
+  }
+}
+
+function ipDisconnect() {
+  net.connected = false;
+  net.base = '';
+  net.fwVersion = null;
+  net.apiVersion = null;
+  setIpStatus('disconnected');
+  updateFwVersionInfo();
+  setDeviceButtons(false);
+}
+
+function wifiTogglePwd() {
+  const el = document.getElementById('cfg-wifi-pwd');
+  if (!el) return;
+  el.type = (el.type === 'password') ? 'text' : 'password';
+}
+
+// ─── HTTP implementations for device actions ─────────────────────────────────
+
+async function httpDownloadConfig() {
+  usbLog('GET /config', 'tx');
+  const r = await netFetch('/config', {}, 15000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const text = await r.text();
+  usbLog('config.txt received (' + text.length + ' bytes)', 'rx');
+  parseConfig(text);
+  configLoaded = true;
+  document.getElementById('btn-ul-config').disabled = false;
+  setFileName('config.txt');
+}
+
+async function httpUploadConfig() {
+  const text = generateConfig();
+  usbLog('POST /config (' + text.length + ' bytes)', 'tx');
+  const r = await netFetch('/config', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: text }, 15000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  usbLog('OK', 'rx');
+}
+
+async function httpReboot() {
+  usbLog('POST /reboot', 'tx');
+  const r = await netFetch('/reboot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"confirm":"reboot"}' }, 5000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+
+async function httpListFiles() {
+  usbLog('GET /files', 'tx');
+  const r = await netFetch('/files', {}, 15000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  return Array.isArray(data) ? data : (data.files || []);
+}
+
+async function httpDownloadFile(name, onProgress) {
+  usbLog('GET /files/' + name, 'tx');
+  const url = (net.base || '') + '/files/' + encodeURIComponent(name);
+  // Use XHR for reliable progress events (readable streams aren't universally available on some fetch impls)
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+    xhr.timeout = 120000;
+    xhr.onprogress = (e) => {
+      if (!onProgress) return;
+      const total = e.lengthComputable ? e.total : 0;
+      const pct = total > 0 ? Math.min(100, Math.floor((e.loaded / total) * 100)) : 0;
+      try { onProgress(pct, e.loaded, total); } catch(_){}
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (onProgress) try { onProgress(100, xhr.response.byteLength, xhr.response.byteLength); } catch(_){}
+        resolve(new Uint8Array(xhr.response));
+      } else reject(new Error('HTTP ' + xhr.status));
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Timeout'));
+    xhr.send();
+  });
+}
+
+async function httpUploadFile(name, bytes, onProgress) {
+  usbLog('PUT /files/' + name + ' (' + bytes.length + ' bytes)', 'tx');
+  const url = (net.base || '') + '/files/' + encodeURIComponent(name);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.timeout = 180000;
+    if (xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (!onProgress) return;
+        const total = e.lengthComputable ? e.total : bytes.length;
+        const pct = total > 0 ? Math.min(100, Math.floor((e.loaded / total) * 100)) : 0;
+        try { onProgress(pct, e.loaded, total); } catch(_){}
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (onProgress) try { onProgress(100, bytes.length, bytes.length); } catch(_){}
+        resolve('OK:');
+      } else reject(new Error('HTTP ' + xhr.status));
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Timeout'));
+    xhr.send(bytes);
+  });
+}
+
+async function httpDeleteFile(name) {
+  usbLog('DELETE /files/' + name, 'tx');
+  const r = await netFetch('/files/' + encodeURIComponent(name), { method: 'DELETE' }, 10000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return 'OK:';
+}
+
+async function httpRenameFile(oldName, newName) {
+  usbLog('POST /rename ' + oldName + ' -> ' + newName, 'tx');
+  const r = await netFetch('/rename', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ old_name: oldName, new_name: newName }) }, 10000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return 'OK:';
+}
+
+async function httpPlay(id) {
+  usbLog('POST /play id=' + id, 'tx');
+  const r = await netFetch('/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }, 5000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+
+async function httpUpdateFirmware(bytes, onProgress) {
+  usbLog('POST /update (' + bytes.length + ' bytes)', 'tx');
+  const url = (net.base || '') + '/update';
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.timeout = 300000;
+    if (xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (!onProgress) return;
+        const total = e.lengthComputable ? e.total : bytes.length;
+        const pct = total > 0 ? Math.min(100, Math.floor((e.loaded / total) * 100)) : 0;
+        try { onProgress(pct, e.loaded, total); } catch(_){}
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (onProgress) try { onProgress(100, bytes.length, bytes.length); } catch(_){}
+        resolve('OK:');
+      } else reject(new Error('HTTP ' + xhr.status));
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Timeout'));
+    xhr.send(bytes);
+  });
+}
+
+// ─── Init: restore saved mode + IP ───────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const m = localStorage.getItem('pwavplayer_mode');
+    if (m === 'ip') setDeviceMode('ip'); else setDeviceMode('usb');
+    const ip = localStorage.getItem('pwavplayer_ip');
+    if (ip) { const el = document.getElementById('ipAddr'); if (el) el.value = ip; }
+  } catch(_){}
+  setIpStatus('disconnected');
+});
 
 function usbSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 

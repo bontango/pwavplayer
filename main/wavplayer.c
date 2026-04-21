@@ -83,6 +83,11 @@ static struct stac {
 uint16_t gconf[CONF_MAX];
 uint32_t gusbbaud;
 
+// WiFi credentials (strings — kept out of gconf[] which is uint16_t)
+#define WIFI_STR_MAX 65
+char gwifi_ssid[WIFI_STR_MAX] = {0};
+char gwifi_pwd[WIFI_STR_MAX]  = {0};
+
 // Sound file descriptor
 #define NSATTR 4
 typedef struct sfile {
@@ -138,20 +143,43 @@ const char mount_point[] = "/sdcard";
 
 // read config file and override default values
 //
+// trim leading/trailing whitespace and surrounding quotes, write into dst (size n)
+static void cfg_trim_copy(const char *src, char *dst, size_t n) {
+    while (*src == ' ' || *src == '\t') src++;
+    size_t L = strlen(src);
+    while (L > 0 && (src[L-1]=='\r' || src[L-1]=='\n' || src[L-1]==' ' || src[L-1]=='\t')) L--;
+    if (L >= 2 && ((src[0]=='"' && src[L-1]=='"') || (src[0]=='\'' && src[L-1]=='\''))) {
+        src++; L -= 2;
+    }
+    if (L >= n) L = n - 1;
+    memcpy(dst, src, L);
+    dst[L] = '\0';
+}
+
 void ReadConfig(char *fname) {
     FILE *fp;
     if ((fp = fopen(fname,"r")) == NULL) {
         ESP_LOGI(LOG, "No config found, using defaults");
         return;
     }
-#   define LBUF_SZ 100 
+#   define LBUF_SZ 200
     char lbuf[LBUF_SZ];
     while (1) {
         if (fgets(lbuf,LBUF_SZ,fp) == NULL) break;
-        char key[30];
-        char val[30];
-        int k = sscanf(lbuf," %[a-zA-Z0-9] = %[a-zA-Z0-9]",key,val);
-        if (k == 2) {
+        // Split on first '=' — allows values with spaces/special chars (WiFi SSID/password)
+        char *p = lbuf;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '#' || *p == '\0' || *p == '\r' || *p == '\n') continue;
+        char *eq = strchr(p, '=');
+        if (!eq) continue;
+        char key[32], val[LBUF_SZ];
+        size_t klen = (size_t)(eq - p);
+        while (klen > 0 && (p[klen-1] == ' ' || p[klen-1] == '\t')) klen--;
+        if (klen == 0 || klen >= sizeof(key)) continue;
+        memcpy(key, p, klen);
+        key[klen] = '\0';
+        cfg_trim_copy(eq + 1, val, sizeof(val));
+        {
             if (strcmp(key,"dac") == 0) {
                 if (strcmp(val,"12") == 0) gconf[CONF_DAC] = CONF_DAC_12;
                 if (strcmp(val,"16") == 0) gconf[CONF_DAC] = CONF_DAC_16;
@@ -186,6 +214,19 @@ void ReadConfig(char *fname) {
             if (strcmp(key,"usbbaud") == 0) {
                 gusbbaud = (uint32_t)strtoul(val,NULL,10);
             }
+            if (strcmp(key,"wifi_enable") == 0) {
+                gconf[CONF_WIFI_ENABLE] =
+                    (val[0] == 'y' || val[0] == 'Y' || val[0] == '1'
+                     || strcmp(val,"on") == 0 || strcmp(val,"true") == 0) ? 1 : 0;
+            }
+            if (strcmp(key,"wifi_ssid") == 0) {
+                strncpy(gwifi_ssid, val, WIFI_STR_MAX - 1);
+                gwifi_ssid[WIFI_STR_MAX - 1] = '\0';
+            }
+            if (strcmp(key,"wifi_pwd") == 0) {
+                strncpy(gwifi_pwd, val, WIFI_STR_MAX - 1);
+                gwifi_pwd[WIFI_STR_MAX - 1] = '\0';
+            }
         }
     }
     fclose(fp);
@@ -200,7 +241,10 @@ void InitConfig(void) {
     gconf[CONF_RESTPD] = 60; // 60ms
     gconf[CONF_SER] = CONF_SER_NONE;
     gconf[CONF_I2C_ADDR] = 0x66;
+    gconf[CONF_WIFI_ENABLE] = 0;
     gusbbaud = 115200;
+    gwifi_ssid[0] = '\0';
+    gwifi_pwd[0]  = '\0';
 }
 
 

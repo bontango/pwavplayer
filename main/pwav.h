@@ -51,5 +51,6 @@ typedef struct {
 #define CONF_SER_UART       3   // ser=uart
 #define CONF_I2C_ADDR   5       // I2C slave address
 #define CONF_RESTPD     6       // rest period in ms
-#define CONF_MAX        7
+#define CONF_WIFI_ENABLE 7      // 0=off, 1=on
+#define CONF_MAX        8
 

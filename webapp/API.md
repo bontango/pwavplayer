@@ -1,12 +1,18 @@
-# PWAVplayer USB Serial API
+# PWAVplayer Config-Editor API
 
-This document defines the USB serial API implemented in `main/usbserial.c` to support the
-PWAVplayer Config Editor web app (`webapp/PWAVplayer_config_editor.html`).
+This document describes the two transports the PWAVplayer Config Editor
+(`webapp/PWAVplayer_config_editor.html`) uses to talk to the device:
 
-The editor communicates via the **Web Serial API** (Chrome/Edge) using a frame-based text protocol
-over UART0. The baud rate is configurable via the `usbbaud` key in `config.txt`
-(default `115200`; also supported: `230400`, `460800`, `921600`). Both the firmware port and
-the editor's "Baud" drop-down must be set to the same value.
+1. **USB serial** — a frame-based text protocol on `UART_NUM_0`, implemented in
+   `main/usbserial.c`. Baud rate is configurable via `usbbaud` in `config.txt`
+   (default `115200`; also supported: `230400`, `460800`, `921600`). Editor and firmware
+   must agree on the baud.
+2. **HTTP REST** — an `esp_http_server` on TCP port **8080**, implemented in
+   `main/httpserver.c`. Started only when `wifi_enable=yes` **and** the STA connection
+   produced an IP. Runs in parallel to USB — the editor chooses one transport per session.
+
+Both transports share the same SD-card helpers (`main/cmdapi.c`) — no SD logic is
+duplicated.
 
 ---
 
@@ -211,7 +217,37 @@ Device TX:  OK:TIME_SET\r\n
 
 ---
 
-### 8. REBOOT
+### 8. WIFI:STATUS
+
+**Purpose:** Query the current WiFi connection state. Intended for the editor's
+**Device → Get IP Status** button so a user can find out which IP the device got before
+switching to IP mode.
+
+```
+Editor TX:  WIFI:STATUS\r\n
+Device TX:  OK:WIFI_STATUS=<state>[,ip=<ip>][,ssid=<ssid>]\r\n
+```
+
+**States:**
+
+| `<state>` | Meaning |
+|-----------|---------|
+| `disabled` | `wifi_enable=no` in `config.txt` |
+| `no_ssid` | `wifi_enable=yes` but `wifi_ssid` is empty |
+| `disconnected` | Enabled + SSID set, but not currently associated (connect failed or link dropped) |
+| `connected` | Associated with an AP; `ip=` and `ssid=` fields are included |
+
+**Examples:**
+```
+OK:WIFI_STATUS=disabled
+OK:WIFI_STATUS=no_ssid
+OK:WIFI_STATUS=disconnected,ssid=MyNetwork
+OK:WIFI_STATUS=connected,ip=192.168.1.42,ssid=MyNetwork
+```
+
+---
+
+### 9. REBOOT
 
 **Purpose:** Trigger a software reset of the ESP32.
 
@@ -271,4 +307,47 @@ tasks, regardless of the `ser=` setting in `config.txt`.
 | `FILE:DELETE=<name>` | Editor→Device | — | `OK:FILE_DELETED` |
 | `FILE:RENAME=<old>,<new>` | Editor→Device | — | `OK:FILE_RENAMED` |
 | `SET:TIME=<unix_seconds>` | Editor→Device | — | `OK:TIME_SET` |
+| `WIFI:STATUS` | Editor→Device | — | `OK:WIFI_STATUS=<state>[,ip=,ssid=]` |
 | `REBOOT` | Editor→Device | — | `OK:REBOOTING` |
+
+---
+
+## HTTP REST API (port 8080)
+
+Implemented in `main/httpserver.c`. Started from `main/main.c` after `wifi_init_sta()`
+succeeds. All responses carry `Access-Control-Allow-Origin: *` so the browser editor can
+call them from a local file.
+
+- **Base URL:** `http://<device-ip>:8080`
+- **API version:** `1` (see `HTTP_API_VERSION` in `main/httpserver.h`). The editor reads
+  `api_version` from `/status` and warns on mismatch.
+- **Auth / TLS:** none — the server is designed for a trusted LAN (same trust model as
+  LISYclock).
+
+### Endpoints
+
+| Method | Route | Request body | Response | Description |
+|--------|-------|--------------|----------|-------------|
+| GET    | `/status` | — | `{"status":"ok","version":"<fw>","api_version":1}` | Health + firmware version |
+| GET    | `/config` | — | `text/plain` | Streams `config.txt` from SD |
+| POST   | `/config` | `text/plain` body | `OK` | Writes body to `/sdcard/config.txt` |
+| GET    | `/files` | — | JSON array: `[{"name":"...","size":N,"mtime":T}, ...]` | SD root listing |
+| GET    | `/files/<name>` | — | `application/octet-stream` | Downloads the named file |
+| PUT    | `/files/<name>` | binary body | `OK` | Uploads / overwrites the file |
+| DELETE | `/files/<name>` | — | `OK` | Deletes the file |
+| POST   | `/rename` | `{"old_name":"a","new_name":"b"}` | `OK` | Renames a file on SD |
+| POST   | `/reboot` | `{"confirm":"reboot"}` | `OK` | Triggers `esp_restart()` |
+| POST   | `/update` | binary body (.bin) | `OK` (then reboot) | Uploads firmware to `update.bin`; device flashes it on next boot |
+| POST   | `/play`   | `{"id":<num>}` | `OK` | Enqueues `{cmd='p', arg=id}` on the `xpinevt` stream buffer — same as USB `p <num>` |
+| OPTIONS | `/*`     | — | `204 No Content` | CORS preflight |
+
+### Path-traversal protection
+
+`/files/<name>` routes reuse `cmdapi_resolve_path()`, which rejects `..`, `/` and `\`
+in the filename component. The same helper is used by the USB file handlers.
+
+### Progress
+
+The editor uses `XMLHttpRequest` for `/files/<name>` (GET and PUT) and `/update` so that
+`upload.onprogress` / `onprogress` events drive the progress bars. `fetch()` does not
+expose upload progress on current browsers.

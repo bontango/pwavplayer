@@ -13,6 +13,7 @@ Ein polyphoner WAV-Player für ESP32-Mikrocontroller, entwickelt für den Einsat
 - **GPIO-Events**: Bis zu 10 Eingangspins lösen Soundwiedergaben aus (direkt oder binär-codiert für Williams System 11 / Gottlieb System 1/80/80A/80B).
 - **Serielle Steuerung**: Sounds können über UART oder I2C (Slave) ausgelöst werden.
 - **USB Config Editor**: Browser-basierter Editor (`webapp/`) zur Verwaltung der SD-Karte und Konfiguration über USB (Chrome/Edge).
+- **WLAN/HTTP-Zugang (optional)**: Derselbe Editor kann das Gerät zusätzlich über WLAN ansprechen (HTTP-REST auf Port 8080), parallel zu USB. Nur STA-Modus, Zugangsdaten liegen in `config.txt`.
 - **Dateiattribute**: Einzelne WAV-Dateien können als Loop, Hintergrundsound, Init-Sound oder mit Kill-Verhalten konfiguriert werden.
 - **Soundgruppen**: Mehrere Sounds können zu einer Gruppe zusammengefasst werden, aus der zufällig oder sequenziell ausgewählt wird.
 - **Firmware-Update**: Neue Firmware kann als `update.bin` auf der SD-Karte abgelegt und beim Bootvorgang automatisch eingespielt werden.
@@ -35,6 +36,9 @@ Die Datei `config.txt` muss im Wurzelverzeichnis der SD-Karte liegen. Jede Zeile
 | `ser` | `none`, `uart`, `i2c` | `none` | Serielle Schnittstelle für Sound-Kommandos |
 | `addr` | Hex-Zahl | `0x66` | I2C-Slave-Adresse (nur wenn `ser=i2c`) |
 | `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baudrate des USB-Config-Editor-Ports (UART0) |
+| `wifi_enable` | `yes`, `no` | `no` | Aktiviert STA-WLAN und HTTP-Server auf Port 8080 |
+| `wifi_ssid` | String | *(leer)* | WLAN-SSID — erforderlich bei `wifi_enable=yes` |
+| `wifi_pwd` | String | *(leer)* | WLAN-Passwort |
 
 **Beispiel:**
 ```
@@ -45,6 +49,9 @@ deb=10
 rpd=40
 ser=uart
 usbbaud=921600
+wifi_enable=yes
+wifi_ssid=MeinNetz
+wifi_pwd=geheim
 ```
 
 > **Hinweis:** Fehlt die Datei `config.txt`, startet die Firmware mit den obigen Standardwerten.
@@ -181,26 +188,29 @@ Beim nächsten Bootvorgang prüft das Gerät ob die Datei vorhanden und gültig 
 
 ---
 
-## USB Config Editor
+## Config Editor (USB oder WLAN)
 
-Im Verzeichnis `webapp/` befindet sich `PWAVplayer_config_editor.html` – ein browserbasierter Editor für Chrome oder Edge (Desktop).
+Im Verzeichnis `webapp/` befindet sich `PWAVplayer_config_editor.html` – ein browserbasierter Editor für Chrome oder Edge (Desktop). Er kann das Gerät wahlweise über **USB** (Web Serial) oder **WLAN** (HTTP-REST auf Port 8080) ansprechen. Der Modus wird im Device-Tab umgeschaltet; firmware­seitig laufen beide Transporte parallel.
 
 ### Funktionen
 
-- **Konfiguration**: `config.txt` bearbeiten, auf das Gerät hochladen oder herunterladen
+- **Konfiguration**: `config.txt` bearbeiten, auf das Gerät hochladen oder herunterladen (inkl. WLAN-Einstellungen im *General*-Tab)
 - **SD-Karte**: Dateiliste anzeigen (Name, Größe, Datum), Dateien herunterladen, umbenennen und löschen
 - **Firmware-Update**: Lokale `.bin`-Datei als `update.bin` auf die SD-Karte übertragen; vollständiges Flash-Utility über esptool-js (Browser-USB)
 - **Standardkonfiguration**: Vorgabe-`config.txt` von lisy.dev laden
+- **WLAN-Status (USB)**: Im *Device*-Tab fragt der Button **Get IP Status** den Verbindungszustand ab und überträgt die vergebene IP automatisch in das Adressfeld des IP-Modus
+- **Debug-Tab**: Das USB-Protokoll-Log wurde in einen eigenen Tab ausgelagert
 
 ### Voraussetzungen
 
-- Chrome oder Edge (Desktop) – Web Serial API erforderlich
-- ESP32 per USB verbunden
-- Firmware läuft (`UsbSerial`-Task aktiv)
+- Chrome oder Edge (Desktop) – Web Serial API erforderlich für USB-Modus
+- ESP32 per USB verbunden, oder im LAN erreichbar (STA-WLAN)
+- Firmware läuft (`UsbSerial`-Task ist immer aktiv; HTTP-Server startet nur bei `wifi_enable=yes` und erfolgreicher IP-Zuteilung)
 
-### Protokoll
+### Protokolle
 
-Die Kommunikation erfolgt über `UART_NUM_0` mit einem frame-basierten Textprotokoll. Die
-Baudrate wird über den Schlüssel `usbbaud` in `config.txt` konfiguriert (Standard `115200`).
-Details zum Protokoll siehe `webapp/API.md`, Bedienungshinweise zum Editor in
+- **USB**: framebasiertes Textprotokoll auf `UART_NUM_0`; Baudrate per `usbbaud` (Standard `115200`).
+- **HTTP**: REST auf Port 8080, CORS aktiv, keine Authentifizierung (für vertrauenswürdige LAN-Umgebung).
+
+Details zu beiden Transporten siehe `webapp/API.md`, Bedienungshinweise zum Editor in
 `webapp/README.md`.
