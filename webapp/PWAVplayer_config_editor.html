@@ -114,6 +114,27 @@
   </div>
 </div>
 
+<!-- ── Pick-from-SD modal ────────────────────────────────────────────── -->
+<div class="modal fade" id="pickModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pickModalTitle">Select file</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="pickModalFilter" class="form-control form-control-sm mb-2" placeholder="Filter…">
+        <div id="pickModalList" class="list-group" style="max-height:50vh; overflow:auto;"></div>
+        <div id="pickModalEmpty" class="text-muted small mt-2 d-none">No matching files.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="pickModalCancel" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="pickModalOk" disabled>Assign</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Hidden file input -->
 <input type="file" id="fileInput" accept=".txt,.cfg" style="display:none">
 <input type="file" id="sf-assign-input" accept=".wav" style="display:none">
@@ -121,7 +142,7 @@
 <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-dark bg-dark px-3 py-2">
   <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
-    <small class="text-secondary fw-normal">v1.04</small>
+    <small class="text-secondary fw-normal">v1.05</small>
   </span>
   <span id="currentFileName" class="text-secondary text-truncate mx-auto"
         style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
@@ -146,6 +167,9 @@
     </li>
     <li class="nav-item" role="presentation">
       <a class="nav-link" id="tabSoundfilesLink" data-bs-toggle="tab" href="#tabSoundfiles" role="tab">Soundfiles</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" id="tabSoundgroupsLink" data-bs-toggle="tab" href="#tabSoundgroups" role="tab">Soundgroups</a>
     </li>
     <li class="nav-item" role="presentation">
       <a class="nav-link" data-bs-toggle="tab" href="#tabUpdate" role="tab">Update</a>
@@ -475,6 +499,39 @@
 
 
     <!-- ══════════════════════════════════════════════════════════════
+         TAB: SOUNDGROUPS
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tabSoundgroups" role="tabpanel">
+
+      <h5 class="mb-3">Sound Groups <small class="text-muted fw-normal">(.grp files on SD)</small></h5>
+
+      <div class="d-flex gap-2 flex-wrap mb-3">
+        <button class="btn btn-outline-secondary btn-sm" id="btn-sg-refresh" onclick="loadSoundgroups()" disabled>
+          &#8635; Refresh
+        </button>
+        <button class="btn btn-outline-primary btn-sm" id="btn-sg-add" onclick="addSoundgroup()" disabled>
+          &#10010; Add Group
+        </button>
+        <button class="btn btn-success btn-sm" id="btn-sg-write" onclick="writeSoundgroups()" disabled>
+          &#10004; Write Groups
+        </button>
+        <span id="sg-status" class="small text-muted align-self-center"></span>
+      </div>
+
+      <div class="small text-muted mb-2">
+        Groups bundle several WAV IDs under one trigger ID. On trigger the player picks one
+        member — randomly (<code>m</code>) or round-robin (<code>r</code>). See
+        <code>Groups.md</code> for details.
+      </div>
+
+      <div id="sg-list" class="d-flex flex-column gap-2">
+        <div class="small text-muted">Connect to device and click Refresh.</div>
+      </div>
+
+    </div><!-- /tabSoundgroups -->
+
+
+    <!-- ══════════════════════════════════════════════════════════════
          TAB: UPDATE
     ═══════════════════════════════════════════════════════════════ -->
     <div class="tab-pane fade" id="tabUpdate" role="tabpanel">
@@ -630,6 +687,69 @@ function askConfirm(message, { okText = 'OK', cancelText = 'Cancel', okClass = '
     okBtn.addEventListener('click', onOk);
     el.addEventListener('hidden.bs.modal', onHidden);
     modal.show();
+  });
+}
+
+function askPickFile(items, { title = 'Select file', okText = 'Assign' } = {}) {
+  return new Promise(resolve => {
+    const el     = document.getElementById('pickModal');
+    const titleE = document.getElementById('pickModalTitle');
+    const listE  = document.getElementById('pickModalList');
+    const emptyE = document.getElementById('pickModalEmpty');
+    const filtE  = document.getElementById('pickModalFilter');
+    const okBtn  = document.getElementById('pickModalOk');
+    titleE.textContent = title;
+    okBtn.textContent  = okText;
+    okBtn.disabled = true;
+    filtE.value = '';
+    let selected = null;
+
+    const render = (term) => {
+      const t = (term || '').toLowerCase();
+      listE.innerHTML = '';
+      let shown = 0;
+      items.forEach(it => {
+        if (t && !it.name.toLowerCase().includes(t)) return;
+        shown++;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'list-group-item list-group-item-action font-monospace small text-truncate';
+        btn.dataset.name = it.name;
+        btn.title = it.name;
+        const note = it.note ? ` <span class="text-muted small">— ${escHtml(it.note)}</span>` : '';
+        btn.innerHTML = escHtml(it.name) + note;
+        btn.addEventListener('click', () => {
+          selected = it.name;
+          okBtn.disabled = false;
+          listE.querySelectorAll('.list-group-item.active').forEach(e => e.classList.remove('active'));
+          btn.classList.add('active');
+        });
+        btn.addEventListener('dblclick', () => {
+          selected = it.name;
+          okBtn.disabled = false;
+          okBtn.click();
+        });
+        listE.appendChild(btn);
+      });
+      emptyE.classList.toggle('d-none', shown > 0);
+    };
+    render('');
+    const onFilter = () => render(filtE.value);
+    filtE.addEventListener('input', onFilter);
+
+    const modal = bootstrap.Modal.getOrCreateInstance(el);
+    let result = null;
+    const onOk = () => { result = selected; modal.hide(); };
+    const onHidden = () => {
+      okBtn.removeEventListener('click', onOk);
+      filtE.removeEventListener('input', onFilter);
+      el.removeEventListener('hidden.bs.modal', onHidden);
+      resolve(result);
+    };
+    okBtn.addEventListener('click', onOk);
+    el.addEventListener('hidden.bs.modal', onHidden);
+    modal.show();
+    setTimeout(() => { try { filtE.focus(); } catch(_){} }, 150);
   });
 }
 
@@ -1310,7 +1430,10 @@ function renderSoundfileRows(files) {
     tr.dataset.originalName = active ? entry.originalName : '';
     if (!active) tr.classList.add('text-muted');
     tr.innerHTML =
-      `<td><button class="btn btn-outline-primary btn-sm sf-assign" onclick="assignSoundfile(${id})"${checkConnectedSilent() ? '' : ' disabled'}>Assign</button></td>` +
+      `<td class="text-nowrap">` +
+        `<button class="btn btn-outline-primary btn-sm sf-assign-pc me-1" title="Assign from PC (upload)" onclick="assignSoundfilePC(${id})"${checkConnectedSilent() ? '' : ' disabled'}>PC</button>` +
+        `<button class="btn btn-outline-primary btn-sm sf-assign-sd" title="Assign from SD (rename existing file)" onclick="assignSoundfileSD(${id})"${checkConnectedSilent() ? '' : ' disabled'}>SD</button>` +
+      `</td>` +
       `<td class="font-monospace small">${sfPad4(id)}</td>` +
       `<td>${sfAttrSelect(id, 0, p.a1, !active)}</td>` +
       `<td>${sfAttrSelect(id, 1, p.a2, !active)}</td>` +
@@ -1434,7 +1557,141 @@ function sfSanitizeDesc(stem) {
   return d || 'sound';
 }
 
-async function assignSoundfile(id) {
+async function sfFetchFileList() {
+  if (net.mode === 'ip') return await httpListFiles();
+  const fp = usbReceiveTextFrame(15000);
+  await usbWriteText('FILE:LIST\r\n');
+  usbLog('>> FILE:LIST', 'tx');
+  const jsonText = await fp;
+  try {
+    const data = JSON.parse(jsonText);
+    return Array.isArray(data) ? data : (data.files || []);
+  } catch (_) {
+    return jsonText.trim().split('\n').filter(Boolean).map(l => {
+      const p = l.split('\t');
+      return { name: p[0], size: p[1] || '' };
+    });
+  }
+}
+
+async function assignSoundfileSD(id) {
+  if (!checkConnected()) return;
+  const tr = document.querySelector('#sf-tbody tr[data-id="' + id + '"]');
+  const btn = tr ? tr.querySelector('button.sf-assign-sd') : null;
+  const origHtml = btn ? btn.innerHTML : '';
+
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  let files;
+  try {
+    files = await sfFetchFileList();
+  } catch (e) {
+    usbLog('File list failed: ' + e.message, 'err');
+    showToast('Could not list SD files: ' + e.message, 'danger');
+    if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+    return;
+  } finally {
+    if (btn) { btn.innerHTML = origHtml; btn.disabled = !checkConnectedSilent(); }
+  }
+
+  const wavs = (files || [])
+    .map(f => (typeof f === 'string' ? { name: f } : f))
+    .filter(f => f.name && /\.wav$/i.test(f.name));
+  if (!wavs.length) {
+    showToast('No .wav files on SD card.', 'warning');
+    return;
+  }
+
+  const items = wavs.map(f => {
+    const p = parseSoundfileName(f.name);
+    const note = (p && p.id >= SF_MIN_ID && p.id <= SF_MAX_ID) ? ('already slot ' + sfPad4(p.id)) : '';
+    return { name: f.name, note };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  const source = await askPickFile(items, { title: 'Assign to slot ' + sfPad4(id), okText: 'Assign' });
+  if (!source) return;
+
+  const desc = sfSanitizeDesc(source);
+  const target = buildSoundfileName(id, 'x', 'x', 'x', 'x', 100, desc);
+  const original = tr ? (tr.dataset.originalName || '') : '';
+
+  if (source === target && original === target) {
+    showToast('File is already assigned to this slot.', 'info');
+    return;
+  }
+
+  if (original && original !== target && original !== source) {
+    if (!await askConfirm('Slot ' + sfPad4(id) + ' is already assigned to "' + original + '".\nReplace it with "' + target + '"?', { okText: 'Replace', okClass: 'btn-danger' })) {
+      return;
+    }
+  }
+
+  const targetExists = wavs.some(f => f.name === target) && target !== source;
+  if (targetExists) {
+    if (!await askConfirm('File "' + target + '" already exists on SD.\nOverwrite it?', { okText: 'Overwrite', okClass: 'btn-danger' })) {
+      return;
+    }
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    if (original && original !== target && original !== source) {
+      usbLog('Deleting old file: ' + original, 'sys');
+      try {
+        const delResp = (net.mode === 'ip')
+          ? await httpDeleteFile(original)
+          : await usbSendCmd('FILE:DELETE=' + original, 5000);
+        if (!delResp.startsWith('OK:')) {
+          usbLog('Delete failed: ' + delResp, 'err');
+          showToast('Could not delete old file: ' + delResp, 'warning');
+        }
+      } catch (e) {
+        usbLog('Delete error: ' + e.message, 'err');
+      }
+    }
+    if (targetExists) {
+      usbLog('Deleting existing target: ' + target, 'sys');
+      try {
+        const delResp = (net.mode === 'ip')
+          ? await httpDeleteFile(target)
+          : await usbSendCmd('FILE:DELETE=' + target, 5000);
+        if (!delResp.startsWith('OK:')) {
+          usbLog('Delete failed: ' + delResp, 'err');
+          showToast('Could not overwrite target: ' + delResp, 'danger');
+          return;
+        }
+      } catch (e) {
+        usbLog('Delete error: ' + e.message, 'err');
+        showToast('Overwrite failed: ' + e.message, 'danger');
+        return;
+      }
+    }
+
+    if (source === target) {
+      showToast('File "' + target + '" is already correctly named.', 'info');
+      await loadSoundfiles();
+      return;
+    }
+
+    usbLog('Renaming "' + source + '" → "' + target + '"', 'sys');
+    const resp = (net.mode === 'ip')
+      ? await httpRenameFile(source, target)
+      : await usbSendCmd('FILE:RENAME=' + source + ',' + target, 5000);
+    usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
+    if (resp.startsWith('OK:')) {
+      showToast('Assigned "' + target + '"', 'success');
+      await loadSoundfiles();
+    } else {
+      showToast('Assign failed: ' + resp, 'danger');
+    }
+  } catch (e) {
+    usbLog('Assign error: ' + e.message, 'err');
+    showToast('Assign failed: ' + e.message, 'danger');
+  } finally {
+    if (btn) { btn.innerHTML = origHtml; btn.disabled = !checkConnectedSilent(); }
+  }
+}
+
+async function assignSoundfilePC(id) {
   if (!checkConnected()) return;
   const input = document.getElementById('sf-assign-input');
   if (!input) return;
@@ -1445,7 +1702,7 @@ async function assignSoundfile(id) {
     if (!file) return;
 
     const tr = document.querySelector('#sf-tbody tr[data-id="' + id + '"]');
-    const btn = tr ? tr.querySelector('button.sf-assign') : null;
+    const btn = tr ? tr.querySelector('button.sf-assign-pc') : null;
     const origHtml = btn ? btn.innerHTML : '';
 
     const desc = sfSanitizeDesc(file.name);
@@ -1549,7 +1806,311 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isConnected && !sfLoaded) loadSoundfiles();
     });
   }
+  const sglink = document.getElementById('tabSoundgroupsLink');
+  if (sglink) {
+    sglink.addEventListener('shown.bs.tab', () => {
+      if (isConnected && !sgLoaded) loadSoundgroups();
+    });
+  }
 });
+
+// ─── Soundgroups Tab ──────────────────────────────────────────────────────────
+
+const SG_RE = /^(\d{4})-([A-Za-z])-(.+)\.grp$/i;
+let sgLoaded = false;
+let sgEntries = [];   // { originalName|null, id, attr, members:Set<int>, desc }
+let sgWavList = [];   // [{ id, desc }] sorted by id
+
+function parseGroupName(name) {
+  const m = SG_RE.exec(name);
+  if (!m) return null;
+  const id = parseInt(m[1], 10);
+  const attr = m[2].toLowerCase();
+  const parts = m[3].split('-');
+  const members = [];
+  let i = 0;
+  for (; i < parts.length; i++) {
+    if (/^\d+$/.test(parts[i])) members.push(parseInt(parts[i], 10));
+    else break;
+  }
+  const desc = parts.slice(i).join('-');
+  return { id, attr, members, desc };
+}
+
+function buildGroupName(id, attr, members, desc) {
+  const parts = [sfPad4(id), (attr || 'm').toLowerCase()];
+  for (const m of members) parts.push(String(m));
+  parts.push(desc && desc.length ? desc : 'group');
+  return parts.join('-') + '.grp';
+}
+
+function sgSanitizeDesc(s) {
+  let d = (s || '').replace(/\.grp$/i, '')
+                   .replace(/[^A-Za-z0-9-]+/g, '-')
+                   .replace(/-+/g, '-')
+                   .replace(/^-|-$/g, '');
+  if (!d || /^\d+$/.test(d)) d = 'group';
+  return d;
+}
+
+async function loadSoundgroups() {
+  if (!checkConnected()) return;
+  const status = document.getElementById('sg-status');
+  status.textContent = 'Loading…';
+  let files;
+  try {
+    files = await sfFetchFileList();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    showToast('Failed to load files: ' + e.message, 'danger');
+    return;
+  }
+  const norm = (files || []).map(f => typeof f === 'string' ? { name: f } : f).filter(f => f && f.name);
+
+  sgWavList = [];
+  for (const f of norm) {
+    if (!/\.wav$/i.test(f.name)) continue;
+    const p = parseSoundfileName(f.name);
+    if (p && p.id >= SF_MIN_ID && p.id <= SF_MAX_ID) {
+      sgWavList.push({ id: p.id, desc: p.desc });
+    }
+  }
+  sgWavList.sort((a, b) => a.id - b.id);
+
+  sgEntries = [];
+  for (const f of norm) {
+    if (!/\.grp$/i.test(f.name)) continue;
+    const p = parseGroupName(f.name);
+    if (!p) continue;
+    sgEntries.push({
+      originalName: f.name,
+      id: p.id,
+      attr: /^[mr]$/i.test(p.attr) ? p.attr : 'm',
+      members: new Set(p.members),
+      desc: p.desc,
+    });
+  }
+  sgEntries.sort((a, b) => a.id - b.id);
+
+  renderSoundgroups();
+  sgLoaded = true;
+  status.textContent = sgEntries.length + ' group(s) found, ' + sgWavList.length + ' WAV(s) available.';
+}
+
+function renderSoundgroups() {
+  const listEl = document.getElementById('sg-list');
+  listEl.innerHTML = '';
+  if (!sgEntries.length) {
+    listEl.innerHTML = '<div class="small text-muted">No groups. Click "Add Group" to create one.</div>';
+    return;
+  }
+  for (const e of sgEntries) listEl.appendChild(renderGroupCard(e));
+}
+
+function renderGroupCard(entry) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const bodyId = 'sg-body-' + Math.random().toString(36).slice(2, 8);
+
+  const hdr = document.createElement('div');
+  hdr.className = 'card-body py-2';
+  hdr.innerHTML =
+    '<div class="d-flex flex-wrap align-items-center gap-2">' +
+      '<label class="small text-muted mb-0">ID</label>' +
+      '<input type="number" class="form-control form-control-sm sg-id" min="0" max="9999" style="width:90px;" value="' + entry.id + '">' +
+      '<label class="small text-muted mb-0">Mode</label>' +
+      '<select class="form-select form-select-sm sg-attr" style="width:160px;">' +
+        '<option value="m"' + (entry.attr === 'm' ? ' selected' : '') + '>m — random</option>' +
+        '<option value="r"' + (entry.attr === 'r' ? ' selected' : '') + '>r — round-robin</option>' +
+      '</select>' +
+      '<label class="small text-muted mb-0">Description</label>' +
+      '<input type="text" class="form-control form-control-sm sg-desc font-monospace" style="min-width:160px; flex:1 1 auto;" value="' + escHtml(entry.desc) + '">' +
+      '<button class="btn btn-outline-secondary btn-sm sg-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#' + bodyId + '">Members</button>' +
+      '<button class="btn btn-outline-danger btn-sm sg-delete" type="button">Delete</button>' +
+    '</div>' +
+    '<div class="small mt-1 sg-members-summary"></div>' +
+    '<div class="small mt-1 sg-fname font-monospace"></div>';
+
+  const body = document.createElement('div');
+  body.className = 'collapse';
+  body.id = bodyId;
+  const inner = document.createElement('div');
+  inner.className = 'card-body border-top';
+  inner.innerHTML =
+    '<div class="small text-muted mb-2">Select which WAV sound IDs belong to this group:</div>' +
+    '<div class="sg-wavlist" style="max-height:260px; overflow:auto;"></div>';
+  body.appendChild(inner);
+
+  const wavListEl = inner.querySelector('.sg-wavlist');
+  if (!sgWavList.length) {
+    wavListEl.innerHTML = '<div class="small text-muted">No sound files found on SD.</div>';
+  } else {
+    for (const w of sgWavList) {
+      const cbId = 'sg-w-' + bodyId + '-' + w.id;
+      const checked = entry.members.has(w.id) ? ' checked' : '';
+      const row = document.createElement('div');
+      row.className = 'form-check';
+      row.innerHTML =
+        '<input class="form-check-input sg-wav" type="checkbox" id="' + cbId + '" data-wid="' + w.id + '"' + checked + '>' +
+        '<label class="form-check-label font-monospace small" for="' + cbId + '">' + sfPad4(w.id) + ' — ' + escHtml(w.desc) + '</label>';
+      wavListEl.appendChild(row);
+    }
+  }
+
+  card.appendChild(hdr);
+  card.appendChild(body);
+
+  const idInp   = card.querySelector('.sg-id');
+  const attrSel = card.querySelector('.sg-attr');
+  const descInp = card.querySelector('.sg-desc');
+  const sumEl   = card.querySelector('.sg-members-summary');
+  const fnEl    = card.querySelector('.sg-fname');
+
+  const updateSummary = () => {
+    const ids = Array.from(entry.members).sort((a, b) => a - b);
+    if (ids.length) {
+      sumEl.textContent = ids.length + ' member' + (ids.length === 1 ? '' : 's') + ': ' + ids.join(', ');
+      sumEl.className = 'small mt-1 sg-members-summary text-muted';
+    } else {
+      sumEl.textContent = 'no members (group will not play)';
+      sumEl.className = 'small mt-1 sg-members-summary text-warning';
+    }
+    const newName = buildGroupName(entry.id, entry.attr, ids, sgSanitizeDesc(entry.desc));
+    if (!entry.originalName) {
+      fnEl.textContent = 'new → ' + newName;
+      fnEl.className = 'small mt-1 sg-fname font-monospace text-info';
+    } else if (newName !== entry.originalName) {
+      fnEl.textContent = entry.originalName + ' → ' + newName;
+      fnEl.className = 'small mt-1 sg-fname font-monospace text-warning';
+    } else {
+      fnEl.textContent = entry.originalName;
+      fnEl.className = 'small mt-1 sg-fname font-monospace text-muted';
+    }
+  };
+
+  card.querySelectorAll('.sg-wav').forEach(cb => cb.addEventListener('change', () => {
+    const wid = parseInt(cb.dataset.wid, 10);
+    if (cb.checked) entry.members.add(wid); else entry.members.delete(wid);
+    updateSummary();
+  }));
+  idInp.addEventListener('input', () => {
+    let v = parseInt(idInp.value, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 9999) v = 9999;
+    entry.id = v;
+    updateSummary();
+  });
+  attrSel.addEventListener('change', () => { entry.attr = attrSel.value; updateSummary(); });
+  descInp.addEventListener('input', () => { entry.desc = descInp.value; updateSummary(); });
+  card.querySelector('.sg-delete').addEventListener('click', () => deleteSoundgroup(entry));
+
+  updateSummary();
+  return card;
+}
+
+async function addSoundgroup() {
+  if (!checkConnected()) return;
+  const used = new Set(sgEntries.map(e => e.id));
+  let nextId = 1;
+  while (used.has(nextId) && nextId < 9999) nextId++;
+  sgEntries.push({
+    originalName: null,
+    id: nextId,
+    attr: 'm',
+    members: new Set(),
+    desc: 'group',
+  });
+  sgEntries.sort((a, b) => a.id - b.id);
+  renderSoundgroups();
+  const status = document.getElementById('sg-status');
+  status.textContent = 'Unsaved new group added. Configure and click "Write Groups".';
+}
+
+async function deleteSoundgroup(entry) {
+  if (!entry.originalName) {
+    sgEntries = sgEntries.filter(e => e !== entry);
+    renderSoundgroups();
+    return;
+  }
+  if (!await askConfirm('Delete group "' + entry.originalName + '"?', { okText: 'Delete', okClass: 'btn-danger' })) return;
+  try {
+    const resp = (net.mode === 'ip')
+      ? await httpDeleteFile(entry.originalName)
+      : await usbSendCmd('FILE:DELETE=' + entry.originalName, 5000);
+    if (resp.startsWith('OK:')) {
+      showToast('Deleted "' + entry.originalName + '"', 'success');
+      sgEntries = sgEntries.filter(e => e !== entry);
+      renderSoundgroups();
+    } else {
+      showToast('Delete failed: ' + resp, 'danger');
+    }
+  } catch (e) {
+    usbLog('Group delete error: ' + e.message, 'err');
+    showToast('Delete failed: ' + e.message, 'danger');
+  }
+}
+
+async function writeSoundgroups() {
+  if (!checkConnected()) return;
+  const status = document.getElementById('sg-status');
+
+  const actions = [];
+  const seenNames = new Set();
+  const seenIds = new Set();
+  for (const e of sgEntries) {
+    if (seenIds.has(e.id)) {
+      showToast('Duplicate group ID ' + sfPad4(e.id) + ' — fix before writing.', 'danger');
+      return;
+    }
+    seenIds.add(e.id);
+    const ids = Array.from(e.members).sort((a, b) => a - b);
+    const target = buildGroupName(e.id, e.attr, ids, sgSanitizeDesc(e.desc));
+    if (seenNames.has(target)) {
+      showToast('Duplicate group filename: ' + target, 'danger');
+      return;
+    }
+    seenNames.add(target);
+    if (!e.originalName) {
+      actions.push({ type: 'upload', target, entry: e });
+    } else if (target !== e.originalName) {
+      actions.push({ type: 'rename', source: e.originalName, target, entry: e });
+    }
+  }
+  if (!actions.length) { showToast('Nothing to write.', 'info'); return; }
+
+  status.textContent = 'Writing ' + actions.length + ' change(s)…';
+  let ok = 0, fail = 0;
+  for (const a of actions) {
+    try {
+      let resp;
+      if (a.type === 'rename') {
+        usbLog('Renaming "' + a.source + '" → "' + a.target + '"', 'sys');
+        resp = (net.mode === 'ip')
+          ? await httpRenameFile(a.source, a.target)
+          : await usbSendCmd('FILE:RENAME=' + a.source + ',' + a.target, 5000);
+      } else {
+        usbLog('Creating group file "' + a.target + '"', 'sys');
+        const bytes = new Uint8Array([0x0A]); // placeholder byte — content is ignored
+        resp = (net.mode === 'ip')
+          ? await httpUploadFile(a.target, bytes)
+          : await usbUploadFile(a.target, bytes);
+      }
+      if (resp.startsWith('OK:')) {
+        ok++;
+        a.entry.originalName = a.target;
+      } else {
+        fail++;
+        usbLog('Group write failed: ' + resp, 'err');
+      }
+    } catch (e) {
+      fail++;
+      usbLog('Group write error: ' + e.message, 'err');
+    }
+  }
+  status.textContent = ok + ' written, ' + fail + ' failed.';
+  showToast(ok + ' written, ' + fail + ' failed.', fail ? 'warning' : 'success');
+  await loadSoundgroups();
+}
 
 // ─── Update Tab ───────────────────────────────────────────────────────────────
 
@@ -2080,8 +2641,9 @@ function setStatus(state) {
 }
 
 function setDeviceButtons(on) {
-  ['btn-dl-config','btn-reboot','btn-upload-file','btn-list-files','btn-sf-refresh','btn-sf-write'].forEach(id => {
-    document.getElementById(id).disabled = !on;
+  ['btn-dl-config','btn-reboot','btn-upload-file','btn-list-files','btn-sf-refresh','btn-sf-write','btn-sg-refresh','btn-sg-add','btn-sg-write'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !on;
   });
   document.getElementById('btn-ul-config').disabled = !(on && configLoaded);
   const bws = document.getElementById('btn-wifi-status');
@@ -2092,6 +2654,13 @@ function setDeviceButtons(on) {
     if (tb) tb.innerHTML = '<tr><td colspan="9" class="small text-muted">Connect to device and click Refresh.</td></tr>';
     const st = document.getElementById('sf-status');
     if (st) st.textContent = '';
+    sgLoaded = false;
+    sgEntries = [];
+    sgWavList = [];
+    const sgl = document.getElementById('sg-list');
+    if (sgl) sgl.innerHTML = '<div class="small text-muted">Connect to device and click Refresh.</div>';
+    const sgs = document.getElementById('sg-status');
+    if (sgs) sgs.textContent = '';
   }
 }
 

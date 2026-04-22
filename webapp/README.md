@@ -105,29 +105,40 @@ init/background, kill) in a table.
 - **Refresh** — re-reads the SD file list.
 - **Write Soundconfig** — renames files on the device so the filenames match the
   attributes you've set in the table.
-- Per-row actions: **Assign**, play, download, rename, delete.
+- Per-row actions: **PC** (assign from PC), **SD** (assign from SD), play.
 
 #### Assigning a WAV file to a sound slot
 
-The **Assign** button in each row is the quickest way to put a new WAV file into a
-specific slot (ID `0001`–`0031`). The editor takes care of naming and replacing any
-existing file in that slot.
+Each row has two assign buttons — **PC** uploads a new file from your computer,
+**SD** picks an already-existing WAV file on the SD card and just renames it.
+Both derive the target filename from the slot ID and the source file's base name
+(attributes default to `x` / volume `100`; edit them later via *Write Soundconfig*).
 
-1. Connect the device (**Device → Connect USB**) and switch to the **Soundfiles** tab.
+**PC — upload from local disk**
+
+1. Connect the device and switch to the **Soundfiles** tab.
 2. Click **Refresh** so the table reflects the current SD card contents.
-3. In the row of the desired slot, click **Assign**. A file picker opens — choose the
+3. In the row of the desired slot, click **PC**. A file picker opens — choose the
    `.wav` file from your computer.
-4. The editor derives the target filename from the slot ID and the source file's base
-   name, e.g. picking `alarm.wav` for slot `0005` produces
-   `0005-xxxx-xxx-alarm.wav` (attributes default to `x` / volume `100`; edit them later
-   via *Write Soundconfig*).
+4. Example: picking `alarm.wav` for slot `0005` produces `0005-xxxx-100-alarm.wav`.
 5. If the slot already holds a different file, you are asked to confirm the
-   replacement — the old file is deleted before the new one is uploaded. If the target
-   name is identical, you are asked whether to overwrite.
-6. The **Assign** button shows upload progress (`0%` → `100%`). On success a toast
-   confirms the new filename and the table reloads automatically.
-7. Adjust attributes (loop / break / init / background / kill / volume) in the table and
-   click **Write Soundconfig** to rename the file accordingly.
+   replacement — the old file is deleted before the new one is uploaded.
+6. The button shows upload progress (`0%` → `100%`). On success a toast confirms
+   the new filename and the table reloads automatically.
+
+**SD — rename a file already on the card**
+
+1. Make sure the target `.wav` file is already on the SD card (copied via card
+   reader or previously uploaded).
+2. Click **SD** in the desired row. A modal opens with all `.wav` files on the SD
+   card; files that are already assigned to a slot are marked.
+3. Pick a file and confirm. The editor renames it to `XXXX-xxxx-100-<desc>.wav`.
+   No upload needed — this is instant.
+4. If the slot already holds a different file, it is deleted first. If a file with
+   the target name already exists, you are asked whether to overwrite it.
+
+Finally, adjust attributes (loop / break / init / background / kill / volume) in
+the table and click **Write Soundconfig** to rename the files accordingly.
 
 > Tip: the description part of the filename is sanitized — only letters, digits and
 > dashes are kept. Special characters and spaces are replaced with `-`.
@@ -135,7 +146,34 @@ existing file in that slot.
 > Tip: for many files at once it is faster to raise `usbbaud` first (see
 > *Faster file transfers* below).
 
-### 4. SD Card
+### 4. Soundgroups
+
+Manage `.grp` files on the SD card. A sound group bundles several WAV IDs under one
+trigger ID; when the group is triggered, one member is picked randomly (`m`) or in
+round-robin order (`r`). See `../Groups.md` for the format.
+
+- **Refresh** — re-reads the SD file list and picks out all `.grp` files.
+- **Add Group** — appends a new (unsaved) group row with the next free ID.
+- **Write Groups** — uploads new `.grp` files and renames existing ones so their
+  filenames match the ID / mode / members / description fields in the table.
+
+Per group:
+
+- **ID** — 4-digit trigger ID (shares the namespace with sound IDs; don't reuse).
+- **Mode** — `m` random or `r` round-robin.
+- **Description** — free text; sanitized to letters/digits/hyphens on write.
+- **Members** — expand the collapse to see every WAV currently on the SD card,
+  tick the boxes of the sounds that should belong to this group. The summary line
+  shows the resulting member-ID list; a second line previews the resulting
+  filename (and the pending rename if it differs from the current one).
+- **Delete** — removes the `.grp` file from the SD card (with confirmation).
+  Deleting an unsaved new row just removes it locally.
+
+Since a `.grp` file's content is ignored by the firmware, all state lives in the
+filename — changing members, mode, ID, or description translates to a rename on
+**Write Groups**.
+
+### 5. SD Card
 
 Generic file manager for the SD card root.
 
@@ -148,7 +186,7 @@ Generic file manager for the SD card root.
   device. Useful for a fresh card. The *Overwrite existing* checkbox controls whether
   existing files are replaced.
 
-### 5. Firmware / Flash
+### 6. Firmware / Flash
 
 Two independent actions:
 

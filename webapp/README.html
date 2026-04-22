@@ -176,20 +176,20 @@
 User Guide</h1>
 <p><code>PWAVplayer_config_editor.html</code> is a single-file,
 browser-based tool for configuring a PWAVplayer device, managing files
-on its SD card, and flashing firmware — all over USB from a desktop
-computer. No installation required.</p>
+on its SD card, and flashing firmware — over <strong>USB</strong> (Web
+Serial) or <strong>WiFi</strong> (HTTP REST on port 8080). No
+installation required.</p>
 <hr />
 <h2 id="requirements">Requirements</h2>
 <ul>
-<li><strong>Browser:</strong> Chrome or Edge (desktop). The editor
-relies on the <a
-href="https://developer.mozilla.org/docs/Web/API/Web_Serial_API">Web
-Serial API</a>, which is not available in Firefox or Safari.</li>
-<li><strong>Connection:</strong> Device connected via USB (UART0 /
-built-in USB-Serial).</li>
-<li><strong>Firmware:</strong> PWAVplayer firmware running on the
-device. The <code>UsbSerial</code> task is always active — no
-configuration needed to enable it.</li>
+<li><strong>Browser:</strong> Chrome or Edge (desktop) for USB mode (Web
+Serial). Any modern browser works for IP mode.</li>
+<li><strong>Connection:</strong> USB to the ESP32, <strong>or</strong>
+the device reachable on your LAN (WiFi STA).</li>
+<li><strong>Firmware:</strong> PWAVplayer firmware running. The
+<code>UsbSerial</code> task is always active; the HTTP server starts
+only when <code>wifi_enable=yes</code> in <code>config.txt</code> and
+the device got an IP.</li>
 </ul>
 <hr />
 <h2 id="launching-the-editor">Launching the editor</h2>
@@ -201,7 +201,11 @@ there.</p>
 <hr />
 <h2 id="tabs">Tabs</h2>
 <h3 id="1-device">1. Device</h3>
-<p>Connect, monitor, and control the device.</p>
+<p>Connect, monitor, and control the device. The <strong>Mode</strong>
+radios at the top switch between <em>USB Mode</em> and <em>IP Mode</em>;
+the selection is persisted in <code>localStorage</code>. Firmware-wise
+the two transports run in parallel — the editor just picks one.</p>
+<h4 id="usb-mode">USB Mode</h4>
 <ul>
 <li><strong>Connect USB</strong> — opens the browser’s serial port
 chooser. Pick the ESP32 device and click <em>Connect</em>. After a short
@@ -212,12 +216,32 @@ handshake the device responds with <code>OK:READY</code>.</li>
 <code>230400</code>, <code>460800</code>, <code>921600</code>. If the
 editor hangs on <em>Connecting…</em> for more than a few seconds, the
 two sides disagree about the baud rate.</li>
-<li><strong>USB console</strong> — low-level log of bytes exchanged with
-the device. Useful for troubleshooting.</li>
 <li><strong>Disconnect</strong> — closes the serial port. Do this before
 reflashing or sharing the port with another tool such as
 <code>idf.py monitor</code>.</li>
 </ul>
+<h4 id="ip-mode">IP Mode</h4>
+<ul>
+<li><strong>IP Address</strong> — enter the device’s IP (no port, no
+scheme). The editor talks HTTP REST on port 8080.</li>
+<li><strong>Connect</strong> — does <code>GET /status</code> with a
+6-second timeout + one retry, shows the firmware version, and warns if
+the device’s <code>api_version</code> doesn’t match the editor’s
+expected value.</li>
+<li>The status dot goes green on success, red on timeout/mismatch.</li>
+</ul>
+<h4 id="wifi-status-usb-only">WiFi Status (USB only)</h4>
+<p>Under <em>Config Transfer</em> there is a dedicated <strong>WiFi
+Status</strong> block with a <strong>Get IP Status</strong> button. It
+sends <code>WIFI:STATUS</code> over USB and reports one of:
+<em>disabled</em>, <em>no_ssid</em>, <em>connection failed</em>, or
+<em>connected</em> with the assigned IP and SSID. When connected, the IP
+is automatically copied into the <em>IP Address</em> field above, so you
+can switch to IP Mode without typing.</p>
+<h3 id="debug-tab">Debug tab</h3>
+<p>The low-level USB protocol log (bytes/lines exchanged) has its own
+tab, separate from the Device tab. Useful for troubleshooting USB-mode
+issues. (IP-mode HTTP requests are logged here too for consistency.)</p>
 <h3 id="2-general">2. General</h3>
 <p>Edits <code>config.txt</code> line by line via form fields. The table
 below lists the keys; defaults match the firmware’s
@@ -286,6 +310,24 @@ below lists the keys; defaults match the firmware’s
 <td><code>115200</code>…<code>921600</code></td>
 <td><code>115200</code></td>
 <td>UART0 baud used by <strong>this</strong> editor</td>
+</tr>
+<tr>
+<td><code>wifi_enable</code></td>
+<td><code>yes</code>, <code>no</code></td>
+<td><code>no</code></td>
+<td>Enable WiFi STA + HTTP server on port 8080</td>
+</tr>
+<tr>
+<td><code>wifi_ssid</code></td>
+<td>string</td>
+<td><em>(empty)</em></td>
+<td>WiFi SSID</td>
+</tr>
+<tr>
+<td><code>wifi_pwd</code></td>
+<td>string</td>
+<td><em>(empty)</em></td>
+<td>WiFi password</td>
 </tr>
 </tbody>
 </table>
@@ -465,8 +507,8 @@ sessions</td>
 <hr />
 <h2 id="related-documents">Related documents</h2>
 <ul>
-<li><code>API.md</code> — wire-level protocol specification (commands,
-frame formats).</li>
+<li><code>API.md</code> — wire-level protocol specification for both USB
+frames and HTTP REST.</li>
 <li><code>../README.md</code> / <code>../LIESMICH.md</code> — project
 overview and firmware-side configuration.</li>
 </ul>

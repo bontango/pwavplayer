@@ -195,6 +195,8 @@ Im Verzeichnis `webapp/` befindet sich `PWAVplayer_config_editor.html` – ein b
 ### Funktionen
 
 - **Konfiguration**: `config.txt` bearbeiten, auf das Gerät hochladen oder herunterladen (inkl. WLAN-Einstellungen im *General*-Tab)
+- **Sound-Dateien**: Tabelle pro Slot (IDs 0001–0031) mit zwei Zuweisungs-Buttons — **PC** lädt eine lokale WAV hoch, **SD** wählt eine bereits auf der Karte vorhandene WAV aus und benennt sie auf den Slot um
+- **Soundgruppen**: `.grp`-Dateien auf der SD-Karte anlegen, bearbeiten und löschen; Mitglieder-WAVs über Checkbox-Liste auswählen, Abspielmodus `m` (zufällig) oder `r` (Round-Robin)
 - **SD-Karte**: Dateiliste anzeigen (Name, Größe, Datum), Dateien herunterladen, umbenennen und löschen
 - **Firmware-Update**: Lokale `.bin`-Datei als `update.bin` auf die SD-Karte übertragen; vollständiges Flash-Utility über esptool-js (Browser-USB)
 - **Standardkonfiguration**: Vorgabe-`config.txt` von lisy.dev laden
