@@ -50,8 +50,93 @@
 #include "pwav.h"
 
 // Version
-#define VERSION "0.9.4"
+#define VERSION "1.0.6"
 char *gversion = VERSION;
+
+// ---------------------------------------------------------------------------
+// Activity log — small ring buffer of recent sound-card activity, exposed
+// over the HTTP API (/activity) for the web editor Debug tab.  USB transport
+// does not consume this; USB users see the same information in the regular
+// serial console via ets_printf().
+// ---------------------------------------------------------------------------
+#define ACT_LOG_SIZE   64
+#define ACT_LOG_MSGLEN 56
+typedef struct {
+    uint32_t seq;
+    uint32_t ts_ms;
+    char     msg[ACT_LOG_MSGLEN];
+} ActEntry;
+static ActEntry  act_log[ACT_LOG_SIZE];
+static uint32_t  act_next_seq = 1;           // next seq to assign (0 = unused)
+static portMUX_TYPE act_mux = portMUX_INITIALIZER_UNLOCKED;
+
+void activity_log_add(const char *msg) {
+    if (!msg) return;
+    uint32_t ts = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    portENTER_CRITICAL(&act_mux);
+    uint32_t seq = act_next_seq++;
+    ActEntry *e = &act_log[(seq - 1) % ACT_LOG_SIZE];
+    e->seq = seq;
+    e->ts_ms = ts;
+    size_t i = 0;
+    while (msg[i] && i < ACT_LOG_MSGLEN - 1) { e->msg[i] = msg[i]; i++; }
+    e->msg[i] = '\0';
+    portEXIT_CRITICAL(&act_mux);
+}
+
+char *activity_log_get_json(long since_seq) {
+    // Snapshot under lock, then format outside.
+    ActEntry snap[ACT_LOG_SIZE];
+    uint32_t next;
+    portENTER_CRITICAL(&act_mux);
+    next = act_next_seq;
+    for (int i = 0; i < ACT_LOG_SIZE; i++) snap[i] = act_log[i];
+    portEXIT_CRITICAL(&act_mux);
+
+    // Oldest still-retained seq:
+    uint32_t oldest = (next > ACT_LOG_SIZE) ? next - ACT_LOG_SIZE : 1;
+    uint32_t start  = (since_seq < 0) ? oldest
+                    : ((uint32_t)since_seq + 1 < oldest ? oldest : (uint32_t)since_seq + 1);
+
+    size_t cap = 256 + ACT_LOG_SIZE * (ACT_LOG_MSGLEN + 48);
+    char *out = malloc(cap);
+    if (!out) return NULL;
+    size_t len = 0;
+    len += snprintf(out + len, cap - len, "{\"next\":%u,\"entries\":[", (unsigned)next);
+    bool first = true;
+    for (uint32_t s = start; s < next; s++) {
+        ActEntry *e = &snap[(s - 1) % ACT_LOG_SIZE];
+        if (e->seq != s) continue;
+        // Escape backslash and quote in msg
+        char esc[ACT_LOG_MSGLEN * 2 + 1];
+        size_t j = 0;
+        for (size_t i = 0; e->msg[i] && j < sizeof(esc) - 2; i++) {
+            char c = e->msg[i];
+            if (c == '"' || c == '\\') esc[j++] = '\\';
+            if ((unsigned char)c < 0x20) c = ' ';
+            esc[j++] = c;
+        }
+        esc[j] = '\0';
+        int n = snprintf(out + len, cap - len,
+                         "%s{\"seq\":%u,\"ts\":%u,\"msg\":\"%s\"}",
+                         first ? "" : ",",
+                         (unsigned)e->seq, (unsigned)e->ts_ms, esc);
+        if (n < 0 || (size_t)n >= cap - len) break;
+        len += n;
+        first = false;
+    }
+    len += snprintf(out + len, cap - len, "]}");
+    return out;
+}
+
+// Attract mode state (configured by *.atr file on SD)
+static uint16_t  attract_group_id     = 0;     // 0 = disabled
+static uint32_t  attract_timeout_ms   = 0;     // TT * 60000
+static uint32_t  attract_interval_ms  = 0;     // EE * 60000
+static TickType_t attract_last_activity = 0;
+static TickType_t attract_last_play     = 0;
+static bool      attract_active       = false;
+static bool      attract_playing_now  = false;
 
 // Local defines
 #define MAX_INT16 (32767)
@@ -1026,6 +1111,23 @@ static int16_t InsertEntry(char *fpath, char *fname) {
         }
         return -1;
     }
+
+    // try attract-mode file
+    // Example: 0009-02-01-night-attract.atr
+    // NNNN-TT-EE-desc.atr : group id, inactivity timeout (min), replay interval (min)
+    {
+        uint16_t nnnn;
+        uint8_t  tt, ee;
+        n = sscanf(fname,"%hu-%hhu-%hhu-%*s",&nnnn,&tt,&ee);
+        if ((n == 3) && (strcmp(ext,".atr") == 0) && tt > 0 && ee > 0) {
+            attract_group_id    = nnnn;
+            attract_timeout_ms  = (uint32_t)tt * 60000UL;
+            attract_interval_ms = (uint32_t)ee * 60000UL;
+            ESP_LOGI(LOG,"attract mode: group=%u timeout=%umin interval=%umin",
+                     nnnn, tt, ee);
+            return (int16_t)nnnn;
+        }
+    }
     return -1;
 }
 
@@ -1106,6 +1208,11 @@ static void StartInitSound() {
     if (s) {
         NewTrack(s);
         ets_printf("InitSound => sfile %d\n",s->id);
+        {
+            char m[48];
+            snprintf(m, sizeof(m), "InitSound => sfile %u", (unsigned)s->id);
+            activity_log_add(m);
+        }
         }
 }
 
@@ -1115,11 +1222,33 @@ static void StartInitSound() {
 static void StartSound(uint16_t id) {
 
     ets_printf("Start sound %d\n",id);
-    
+    {
+        char m[48];
+        snprintf(m, sizeof(m), "Start sound %u%s", (unsigned)id,
+                 attract_playing_now ? " (attract)" : "");
+        activity_log_add(m);
+    }
+
+    // reset attract inactivity timer on regular (non-attract) playback
+    if (!attract_playing_now && attract_group_id != 0) {
+        attract_last_activity = xTaskGetTickCount();
+        attract_active = false;
+    }
+
     Sfile *s = LookupSound(id);
-    if (s == NULL) return;
+    if (s == NULL) {
+        char m[48];
+        snprintf(m, sizeof(m), "Lookup sound %u: not found", (unsigned)id);
+        activity_log_add(m);
+        return;
+    }
 
     ets_printf("Lookup sound %d\n",s->id);
+    {
+        char m[48];
+        snprintf(m, sizeof(m), "Lookup sound %u", (unsigned)s->id);
+        activity_log_add(m);
+    }
 
     if (s->attr[3] == 'k') { // kill
         MarkTracksById(-1);
@@ -1148,6 +1277,34 @@ static void StartSound(uint16_t id) {
 
 static void PrintAllStruct(void);
 
+
+// Attract-mode tick: called from the main loop. If no regular sound has been
+// triggered for attract_timeout_ms, periodically re-trigger the attract group
+// every attract_interval_ms.
+//
+static void AttractTick(void) {
+    TickType_t now = xTaskGetTickCount();
+    if (!attract_active) {
+        if ((uint32_t)(now - attract_last_activity) >= pdMS_TO_TICKS(attract_timeout_ms)) {
+            attract_active = true;
+            // trigger the first attract sound immediately
+            attract_last_play = now - pdMS_TO_TICKS(attract_interval_ms);
+            ets_printf("Attract mode ON (group %u)\n", attract_group_id);
+            {
+                char m[48];
+                snprintf(m, sizeof(m), "Attract mode ON (group %u)", (unsigned)attract_group_id);
+                activity_log_add(m);
+            }
+        }
+        return;
+    }
+    if ((uint32_t)(now - attract_last_play) >= pdMS_TO_TICKS(attract_interval_ms)) {
+        attract_playing_now = true;
+        StartSound(attract_group_id);
+        attract_playing_now = false;
+        attract_last_play = now;
+    }
+}
 
 static void ExecCommand(Rxcmd *k) {
     switch (k->cmd) {
@@ -1194,6 +1351,12 @@ void WAVPlayer(void *pvParameters) {
     
     gchain = CreateSpecialGroups();
     ReadCatalogFromSD();
+    {
+        char m[48];
+        snprintf(m, sizeof(m), "pwavplayer v%s ready", gversion);
+        activity_log_add(m);
+    }
+    attract_last_activity = xTaskGetTickCount();
     InitExtDAC();
     SetupDACFeeder();
 
@@ -1232,6 +1395,7 @@ void WAVPlayer(void *pvParameters) {
         if (RunMixer()) DeleteTracks();
         if (FifoFull()) vTaskDelay(1);
         if (xStreamBufferReceive(xpinevt,&xcmd,sizeof(Rxcmd),0) == sizeof(Rxcmd)) ExecCommand(&xcmd);
+        if (attract_group_id != 0) AttractTick();
         
 #if 0
         if (stac.mixxcnt == 200000) StartSound(1);

@@ -18,6 +18,7 @@
 //   POST   /reboot           -> JSON {"confirm":"reboot"}
 //   POST   /update           -> body -> /sdcard/update.bin, reboot
 //   POST   /play             -> JSON {"id":N} — trigger sound
+//   GET    /activity[?since=N] -> JSON {"next":N,"entries":[{seq,ts,msg},...]}
 //   OPTIONS *                -> CORS preflight, 204
 //
 #pragma once

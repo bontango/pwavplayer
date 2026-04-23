@@ -54,3 +54,9 @@ typedef struct {
 #define CONF_WIFI_ENABLE 7      // 0=off, 1=on
 #define CONF_MAX        8
 
+// Activity log (ring buffer in wavplayer.c, queried via HTTP /activity)
+void activity_log_add(const char *msg);
+// Returns newly-allocated malloc'd JSON; caller frees. since_seq < 0 = all.
+// Format: {"next":<N>,"entries":[{"seq":N,"ts":ms,"msg":"..."}, ...]}
+char *activity_log_get_json(long since_seq);
+

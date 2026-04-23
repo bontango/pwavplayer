@@ -370,6 +370,30 @@ static esp_err_t update_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// GET /activity[?since=N] — recent activity log entries
+static esp_err_t activity_get_handler(httpd_req_t *req) {
+    add_cors_headers(req);
+    long since = -1;
+    const char *q = strchr(req->uri, '?');
+    if (q) {
+        const char *p = strstr(q, "since=");
+        if (p) {
+            char *end = NULL;
+            long v = strtol(p + 6, &end, 10);
+            if (end != p + 6) since = v;
+        }
+    }
+    char *json = activity_log_get_json(since);
+    httpd_resp_set_type(req, "application/json");
+    if (!json) {
+        httpd_resp_sendstr(req, "{\"next\":0,\"entries\":[]}");
+        return ESP_OK;
+    }
+    httpd_resp_sendstr(req, json);
+    free(json);
+    return ESP_OK;
+}
+
 // POST /play  — trigger a sound by ID via the xpinevt stream buffer
 static esp_err_t play_post_handler(httpd_req_t *req) {
     add_cors_headers(req);
@@ -431,6 +455,7 @@ esp_err_t httpserver_start(void) {
     REG("/reboot",   HTTP_POST,   reboot_post_handler);
     REG("/update",   HTTP_POST,   update_post_handler);
     REG("/play",     HTTP_POST,   play_post_handler);
+    REG("/activity", HTTP_GET,    activity_get_handler);
     REG("/*",        HTTP_OPTIONS, options_handler);
 #undef REG
 

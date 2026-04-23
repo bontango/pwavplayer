@@ -142,7 +142,7 @@
 <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-dark bg-dark px-3 py-2">
   <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
-    <small class="text-secondary fw-normal">v1.05</small>
+    <small class="text-secondary fw-normal">v1.06</small>
   </span>
   <span id="currentFileName" class="text-secondary text-truncate mx-auto"
         style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
@@ -170,6 +170,9 @@
     </li>
     <li class="nav-item" role="presentation">
       <a class="nav-link" id="tabSoundgroupsLink" data-bs-toggle="tab" href="#tabSoundgroups" role="tab">Soundgroups</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" id="tabAttractModeLink" data-bs-toggle="tab" href="#tabAttractMode" role="tab">Attract mode</a>
     </li>
     <li class="nav-item" role="presentation">
       <a class="nav-link" data-bs-toggle="tab" href="#tabUpdate" role="tab">Update</a>
@@ -462,11 +465,14 @@
     ═══════════════════════════════════════════════════════════════ -->
     <div class="tab-pane fade" id="tabSoundfiles" role="tabpanel">
 
-      <h5 class="mb-3">Sound Files <small class="text-muted fw-normal">(IDs 0001–0031)</small></h5>
+      <h5 class="mb-3">Sound Files <small class="text-muted fw-normal">(WAV files on SD)</small></h5>
 
       <div class="d-flex gap-2 flex-wrap mb-3">
         <button class="btn btn-outline-secondary btn-sm" id="btn-sf-refresh" onclick="loadSoundfiles()" disabled>
           &#8635; Refresh
+        </button>
+        <button class="btn btn-outline-primary btn-sm" id="btn-sf-add" onclick="addSoundfile()" disabled>
+          &#10010; Add Soundfile
         </button>
         <button class="btn btn-success btn-sm" id="btn-sf-write" onclick="writeSoundconfig()" disabled>
           &#10004; Write Soundconfig
@@ -479,7 +485,7 @@
           <thead>
             <tr>
               <th style="width:100px;">Assign</th>
-              <th style="width:60px;">ID</th>
+              <th style="width:90px;">ID</th>
               <th style="width:130px;" title="Loop (position 1):&#10;l — file repeats indefinitely&#10;x — no loop">Loop</th>
               <th style="width:130px;" title="Break (position 2):&#10;b — a running instance of the same sound is stopped before restarting&#10;x — no break">Break</th>
               <th style="width:130px;" title="Init / background (position 3):&#10;i — played automatically on startup; if l (pos. 1) is also set, acts as a background music loop&#10;x — no init sound">Init</th>
@@ -529,6 +535,66 @@
       </div>
 
     </div><!-- /tabSoundgroups -->
+
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TAB: ATTRACT MODE
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tabAttractMode" role="tabpanel">
+
+      <h5 class="mb-3">Attract Mode <small class="text-muted fw-normal">(single .atr file on SD)</small></h5>
+
+      <div class="d-flex gap-2 flex-wrap mb-3">
+        <button class="btn btn-outline-secondary btn-sm" id="btn-am-refresh" onclick="loadAttractMode()" disabled>
+          &#8635; Refresh
+        </button>
+        <button class="btn btn-success btn-sm" id="btn-am-save" onclick="writeAttractMode()" disabled>
+          &#10004; Save
+        </button>
+        <span id="am-status" class="small text-muted align-self-center"></span>
+      </div>
+
+      <div class="small text-muted mb-3">
+        When enabled, the device plays a sound from the chosen group after
+        <em>Timeout</em> minutes of inactivity and then every <em>Interval</em> minutes
+        until the next regular sound is triggered. The mode is controlled by an
+        (empty) file on the SD card named
+        <code>NNNN-TT-EE-description.atr</code>
+        (group ID — timeout min — interval min — description).
+        Disabling removes that file.
+      </div>
+
+      <div id="am-form" class="card">
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="am-enable" disabled>
+            <label class="form-check-label" for="am-enable">Enable Attract Mode</label>
+          </div>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label class="small text-muted mb-1" for="am-group">Sound Group</label>
+              <select class="form-select form-select-sm" id="am-group" disabled></select>
+            </div>
+            <div class="col-md-2">
+              <label class="small text-muted mb-1" for="am-tt">Timeout (min)</label>
+              <input type="number" class="form-control form-control-sm" id="am-tt" min="1" max="99" value="5" disabled>
+            </div>
+            <div class="col-md-2">
+              <label class="small text-muted mb-1" for="am-ee">Interval (min)</label>
+              <input type="number" class="form-control form-control-sm" id="am-ee" min="1" max="99" value="2" disabled>
+            </div>
+            <div class="col-md-3">
+              <label class="small text-muted mb-1" for="am-desc">Description</label>
+              <input type="text" class="form-control form-control-sm font-monospace" id="am-desc" value="attract" disabled>
+            </div>
+          </div>
+
+          <div class="small text-muted mt-3 font-monospace" id="am-fname">—</div>
+        </div>
+      </div>
+
+    </div><!-- /tabAttractMode -->
 
 
     <!-- ══════════════════════════════════════════════════════════════
@@ -611,6 +677,27 @@
       </div>
       <div class="mt-2">
         <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('usb-console').innerHTML=''">Clear</button>
+      </div>
+
+      <hr class="my-4">
+      <h5 class="mb-2">Activity Log <small class="text-muted fw-normal">(IP mode only)</small></h5>
+      <p class="small text-muted mb-2">
+        Shows sound-card activity reported by the device over HTTP
+        (Lookup Sound, Start Sound, Attract Mode, &hellip;). Only available when
+        connected via Wi-Fi / IP.
+      </p>
+      <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+        <div class="form-check mb-0">
+          <input class="form-check-input" type="checkbox" id="chkActivityPoll">
+          <label class="form-check-label small" for="chkActivityPoll">Poll activity</label>
+        </div>
+        <span class="small text-muted" id="activityStatus">Not polling.</span>
+      </div>
+      <div class="border rounded" style="background:#080c0a;">
+        <div id="activity-console" style="flex:none;overflow-y:auto;padding:8px 14px;font-size:12px;line-height:1.7;height:220px;color:#c8f0d8;font-family:'Share Tech Mono','Courier New',monospace;scrollbar-width:thin;scrollbar-color:#2a6640 #0d1410;"></div>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-outline-secondary btn-sm" id="btnActivityClear">Clear</button>
       </div>
     </div><!-- /tabDebug -->
 
@@ -1356,8 +1443,8 @@ function formatDate(unix) {
 
 // ─── Soundfiles Tab ───────────────────────────────────────────────────────────
 
-const SF_MIN_ID = 1;
-const SF_MAX_ID = 31;
+const SF_MIN_ID = 0;
+const SF_MAX_ID = 9999;
 const SF_ATTR_OPTIONS = [
   [['l','Loop'],        ['x','No loop']],
   [['b','Break'],       ['x','No break']],
@@ -1379,6 +1466,8 @@ const SF_RE = /^(\d{4})-([lx])([bx])([ix])([kcx])-(\d{1,3})-(.*)\.wav$/i;
 
 let sfAudio = null;
 let sfLoaded = false;
+let sfEntries = []; // { originalName|null, id, a1, a2, a3, a4, vol, desc }
+let sfKeySeq = 0;
 
 function sfPad4(n) { return String(n).padStart(4, '0'); }
 function sfPad3(n) { return String(n).padStart(3, '0'); }
@@ -1410,40 +1499,85 @@ function sfAttrSelect(idx, attrPos, current, disabled) {
   return `<select class="form-select form-select-sm sf-attr" data-idx="${idx}" data-pos="${attrPos}" title="${escHtml(tip)}" onchange="this.title = (SF_ATTR_DESC[this.dataset.pos] || {})[this.value] || ''"${disabled ? ' disabled' : ''}>${opts}</select>`;
 }
 
-function renderSoundfileRows(files) {
-  const byId = new Map();
+function renderSoundfileRows() {
+  const tb = document.getElementById('sf-tbody');
+  tb.innerHTML = '';
+  if (!sfEntries.length) {
+    tb.innerHTML = '<tr><td colspan="9" class="small text-muted">No soundfiles. Click "Add Soundfile" to create one, or Refresh.</td></tr>';
+    return;
+  }
+  const connected = checkConnectedSilent();
+  for (const entry of sfEntries) {
+    const isNew = !entry.originalName;
+    const tr = document.createElement('tr');
+    tr.dataset.key = entry._key;
+    tr.dataset.originalName = entry.originalName || '';
+    tr.innerHTML =
+      `<td class="text-nowrap">` +
+        `<button class="btn btn-outline-primary btn-sm sf-assign-pc me-1" title="Assign from PC (upload)"${connected ? '' : ' disabled'}>PC</button>` +
+        `<button class="btn btn-outline-primary btn-sm sf-assign-sd" title="Assign from SD (rename existing file)"${connected ? '' : ' disabled'}>SD</button>` +
+      `</td>` +
+      `<td><input type="number" class="form-control form-control-sm sf-id font-monospace" min="0" max="9999" value="${entry.id}" title="Sound ID (0–9999)"></td>` +
+      `<td>${sfAttrSelect(entry._key, 0, entry.a1, false)}</td>` +
+      `<td>${sfAttrSelect(entry._key, 1, entry.a2, false)}</td>` +
+      `<td>${sfAttrSelect(entry._key, 2, entry.a3, false)}</td>` +
+      `<td>${sfAttrSelect(entry._key, 3, entry.a4, false)}</td>` +
+      `<td><input type="number" class="form-control form-control-sm sf-vol" min="0" max="100" value="${entry.vol}" title="Volume 0–100"></td>` +
+      `<td><input type="text" class="form-control form-control-sm sf-desc font-monospace small" value="${escHtml(entry.desc)}"${isNew ? ' placeholder="unsaved — assign via PC/SD"' : ''}></td>` +
+      (isNew
+        ? `<td><button class="btn btn-outline-danger btn-sm sf-remove" title="Remove unsaved row">&times;</button></td>`
+        : `<td><button class="btn btn-outline-secondary btn-sm sf-play">&#9654; Play</button></td>`);
+    tb.appendChild(tr);
+
+    const idInp   = tr.querySelector('input.sf-id');
+    const volInp  = tr.querySelector('input.sf-vol');
+    const descInp = tr.querySelector('input.sf-desc');
+    idInp.addEventListener('input', () => {
+      let v = parseInt(idInp.value, 10);
+      if (isNaN(v)) return;
+      if (v < 0) v = 0;
+      if (v > 9999) v = 9999;
+      entry.id = v;
+    });
+    volInp.addEventListener('input', () => {
+      let v = parseInt(volInp.value, 10);
+      if (isNaN(v)) v = 0;
+      if (v < 0) v = 0;
+      if (v > 100) v = 100;
+      entry.vol = v;
+    });
+    descInp.addEventListener('input', () => { entry.desc = descInp.value; });
+    tr.querySelectorAll('select.sf-attr').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const pos = parseInt(sel.dataset.pos, 10);
+        entry['a' + (pos + 1)] = sel.value;
+      });
+    });
+    tr.querySelector('button.sf-assign-pc').addEventListener('click', () => assignSoundfilePC(entry));
+    tr.querySelector('button.sf-assign-sd').addEventListener('click', () => assignSoundfileSD(entry));
+    if (isNew) {
+      tr.querySelector('button.sf-remove').addEventListener('click', () => removeNewSoundfile(entry));
+    } else {
+      tr.querySelector('button.sf-play').addEventListener('click', () => playSoundfile(entry));
+    }
+  }
+}
+
+function sfRebuildEntriesFromFiles(files) {
+  sfEntries = [];
   for (const f of files || []) {
     const name = typeof f === 'string' ? f : f.name;
     const p = parseSoundfileName(name);
     if (p && p.id >= SF_MIN_ID && p.id <= SF_MAX_ID) {
-      byId.set(p.id, { parsed: p, originalName: name });
+      sfEntries.push({
+        _key: ++sfKeySeq,
+        originalName: name,
+        id: p.id, a1: p.a1, a2: p.a2, a3: p.a3, a4: p.a4,
+        vol: p.vol, desc: p.desc,
+      });
     }
   }
-  const tb = document.getElementById('sf-tbody');
-  tb.innerHTML = '';
-  for (let id = SF_MIN_ID; id <= SF_MAX_ID; id++) {
-    const entry = byId.get(id);
-    const active = !!entry;
-    const p = active ? entry.parsed : { a1:'x', a2:'x', a3:'x', a4:'x', vol:100, desc:'' };
-    const tr = document.createElement('tr');
-    tr.dataset.id = id;
-    tr.dataset.originalName = active ? entry.originalName : '';
-    if (!active) tr.classList.add('text-muted');
-    tr.innerHTML =
-      `<td class="text-nowrap">` +
-        `<button class="btn btn-outline-primary btn-sm sf-assign-pc me-1" title="Assign from PC (upload)" onclick="assignSoundfilePC(${id})"${checkConnectedSilent() ? '' : ' disabled'}>PC</button>` +
-        `<button class="btn btn-outline-primary btn-sm sf-assign-sd" title="Assign from SD (rename existing file)" onclick="assignSoundfileSD(${id})"${checkConnectedSilent() ? '' : ' disabled'}>SD</button>` +
-      `</td>` +
-      `<td class="font-monospace small">${sfPad4(id)}</td>` +
-      `<td>${sfAttrSelect(id, 0, p.a1, !active)}</td>` +
-      `<td>${sfAttrSelect(id, 1, p.a2, !active)}</td>` +
-      `<td>${sfAttrSelect(id, 2, p.a3, !active)}</td>` +
-      `<td>${sfAttrSelect(id, 3, p.a4, !active)}</td>` +
-      `<td><input type="number" class="form-control form-control-sm sf-vol" min="0" max="100" value="${p.vol}" title="Volume 0–100"${active ? '' : ' disabled'}></td>` +
-      `<td><input type="text" class="form-control form-control-sm sf-desc font-monospace small" value="${escHtml(p.desc)}"${active ? '' : ' disabled'}></td>` +
-      `<td><button class="btn btn-outline-secondary btn-sm sf-play" onclick="playSoundfile(${id})"${active ? '' : ' disabled'}>&#9654; Play</button></td>`;
-    tb.appendChild(tr);
-  }
+  sfEntries.sort((a, b) => a.id - b.id);
 }
 
 async function loadSoundfiles() {
@@ -1453,10 +1587,10 @@ async function loadSoundfiles() {
   if (net.mode === 'ip') {
     try {
       const files = await httpListFiles();
-      renderSoundfileRows(files);
+      sfRebuildEntriesFromFiles(files);
+      renderSoundfileRows();
       sfLoaded = true;
-      const n = files.filter(f => parseSoundfileName(typeof f === 'string' ? f : f.name)).length;
-      status.textContent = n + ' soundfile(s) found.';
+      status.textContent = sfEntries.length + ' soundfile(s) found.';
     } catch (e) { status.textContent = 'Error: ' + e.message; showToast('Failed to load soundfiles: ' + e.message, 'danger'); }
     return;
   }
@@ -1477,10 +1611,10 @@ async function loadSoundfiles() {
         return { name: p[0], size: p[1] || '' };
       });
     }
-    renderSoundfileRows(files);
+    sfRebuildEntriesFromFiles(files);
+    renderSoundfileRows();
     sfLoaded = true;
-    const n = files.filter(f => parseSoundfileName(typeof f === 'string' ? f : f.name)).length;
-    status.textContent = n + ' soundfile(s) found.';
+    status.textContent = sfEntries.length + ' soundfile(s) found.';
   } catch (e) {
     status.textContent = 'Error: ' + e.message;
     usbLog('Soundfile list error: ' + e.message, 'err');
@@ -1488,22 +1622,38 @@ async function loadSoundfiles() {
   }
 }
 
-function sfRowValues(tr) {
-  const selects = tr.querySelectorAll('select.sf-attr');
-  const a = ['x','x','x','x'];
-  selects.forEach(s => { a[parseInt(s.dataset.pos, 10)] = s.value; });
-  return {
-    a1: a[0], a2: a[1], a3: a[2], a4: a[3],
-    vol: tr.querySelector('input.sf-vol').value,
-    desc: tr.querySelector('input.sf-desc').value.trim(),
-  };
+function addSoundfile() {
+  if (!checkConnected()) return;
+  const used = new Set(sfEntries.map(e => e.id));
+  let nextId = 1;
+  while (used.has(nextId) && nextId < 9999) nextId++;
+  sfEntries.push({
+    _key: ++sfKeySeq,
+    originalName: null,
+    id: nextId,
+    a1: 'x', a2: 'x', a3: 'x', a4: 'x',
+    vol: 100, desc: '',
+  });
+  sfEntries.sort((a, b) => a.id - b.id);
+  renderSoundfileRows();
+  const st = document.getElementById('sf-status');
+  if (st) st.textContent = 'Unsaved new slot added. Use PC/SD to assign a WAV, or × to remove.';
 }
 
-async function playSoundfile(id) {
+function removeNewSoundfile(entry) {
+  sfEntries = sfEntries.filter(e => e !== entry);
+  renderSoundfileRows();
+}
+
+function sfFindTrForEntry(entry) {
+  return document.querySelector('#sf-tbody tr[data-key="' + entry._key + '"]');
+}
+
+async function playSoundfile(entry) {
   if (!checkConnected()) return;
-  const tr = document.querySelector('#sf-tbody tr[data-id="' + id + '"]');
+  const tr = sfFindTrForEntry(entry);
   if (!tr) return;
-  const name = tr.dataset.originalName;
+  const name = entry.originalName;
   if (!name) return;
   const btn = tr.querySelector('button.sf-play');
   const origHtml = btn ? btn.innerHTML : '';
@@ -1574,9 +1724,10 @@ async function sfFetchFileList() {
   }
 }
 
-async function assignSoundfileSD(id) {
+async function assignSoundfileSD(entry) {
   if (!checkConnected()) return;
-  const tr = document.querySelector('#sf-tbody tr[data-id="' + id + '"]');
+  const id = entry.id;
+  const tr = sfFindTrForEntry(entry);
   const btn = tr ? tr.querySelector('button.sf-assign-sd') : null;
   const origHtml = btn ? btn.innerHTML : '';
 
@@ -1691,17 +1842,18 @@ async function assignSoundfileSD(id) {
   }
 }
 
-async function assignSoundfilePC(id) {
+async function assignSoundfilePC(entry) {
   if (!checkConnected()) return;
   const input = document.getElementById('sf-assign-input');
   if (!input) return;
   input.value = '';
+  const id = entry.id;
   const onChange = async () => {
     input.removeEventListener('change', onChange);
     const file = input.files && input.files[0];
     if (!file) return;
 
-    const tr = document.querySelector('#sf-tbody tr[data-id="' + id + '"]');
+    const tr = sfFindTrForEntry(entry);
     const btn = tr ? tr.querySelector('button.sf-assign-pc') : null;
     const origHtml = btn ? btn.innerHTML : '';
 
@@ -1762,19 +1914,35 @@ async function assignSoundfilePC(id) {
 
 async function writeSoundconfig() {
   if (!checkConnected()) return;
-  const rows = document.querySelectorAll('#sf-tbody tr[data-id]');
-  const renames = [];
-  for (const tr of rows) {
-    const original = tr.dataset.originalName;
-    if (!original) continue;
-    const id = parseInt(tr.dataset.id, 10);
-    const v = sfRowValues(tr);
-    if (!v.desc) continue;
-    const target = buildSoundfileName(id, v.a1, v.a2, v.a3, v.a4, v.vol, v.desc);
-    if (target !== original) renames.push({ tr, original, target });
-  }
-  if (!renames.length) { showToast('Nothing to write — no changes.', 'info'); return; }
   const status = document.getElementById('sf-status');
+  const renames = [];
+  const seenIds = new Set();
+  const seenNames = new Set();
+  let unsavedSkipped = 0;
+  for (const entry of sfEntries) {
+    if (!entry.originalName) { unsavedSkipped++; continue; }
+    if (seenIds.has(entry.id)) {
+      showToast('Duplicate ID ' + sfPad4(entry.id) + ' — fix before writing.', 'danger');
+      return;
+    }
+    seenIds.add(entry.id);
+    const desc = entry.desc.trim();
+    if (!desc) continue;
+    const target = buildSoundfileName(entry.id, entry.a1, entry.a2, entry.a3, entry.a4, entry.vol, desc);
+    if (seenNames.has(target)) {
+      showToast('Duplicate filename: ' + target, 'danger');
+      return;
+    }
+    seenNames.add(target);
+    if (target !== entry.originalName) renames.push({ entry, original: entry.originalName, target });
+  }
+  if (!renames.length) {
+    const msg = unsavedSkipped
+      ? 'Nothing to write — ' + unsavedSkipped + ' unsaved row(s) need PC/SD assignment.'
+      : 'Nothing to write — no changes.';
+    showToast(msg, 'info');
+    return;
+  }
   status.textContent = 'Writing ' + renames.length + ' change(s)…';
   let ok = 0, fail = 0;
   for (const r of renames) {
@@ -1783,7 +1951,7 @@ async function writeSoundconfig() {
         ? await httpRenameFile(r.original, r.target)
         : await usbSendCmd('FILE:RENAME=' + r.original + ',' + r.target, 5000);
       if (resp.startsWith('OK:')) {
-        r.tr.dataset.originalName = r.target;
+        r.entry.originalName = r.target;
         ok++;
       } else {
         usbLog('Rename failed (' + r.original + '): ' + resp, 'err');
@@ -1810,6 +1978,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sglink) {
     sglink.addEventListener('shown.bs.tab', () => {
       if (isConnected && !sgLoaded) loadSoundgroups();
+    });
+  }
+  const amlink = document.getElementById('tabAttractModeLink');
+  if (amlink) {
+    amlink.addEventListener('shown.bs.tab', () => {
+      if (isConnected && !amLoaded) loadAttractMode();
     });
   }
 });
@@ -2111,6 +2285,228 @@ async function writeSoundgroups() {
   showToast(ok + ' written, ' + fail + ' failed.', fail ? 'warning' : 'success');
   await loadSoundgroups();
 }
+
+// ─── Attract Mode Tab ─────────────────────────────────────────────────────────
+
+const AM_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})-(.+)\.atr$/i;
+let amLoaded = false;
+let amOriginalName = null;   // filename currently on SD, or null
+let amGroupList = [];        // [{ id, desc }]
+
+function parseAttractName(name) {
+  const m = AM_RE.exec(name);
+  if (!m) return null;
+  return {
+    groupId: parseInt(m[1], 10),
+    tt: parseInt(m[2], 10),
+    ee: parseInt(m[3], 10),
+    desc: m[4],
+  };
+}
+
+function buildAttractName(groupId, tt, ee, desc) {
+  const pad2 = (n) => String(n).padStart(2, '0');
+  return sfPad4(groupId) + '-' + pad2(tt) + '-' + pad2(ee) + '-' + desc + '.atr';
+}
+
+function amSanitizeDesc(s) {
+  let d = (s || '').replace(/\.atr$/i, '')
+                   .replace(/[^A-Za-z0-9-]+/g, '-')
+                   .replace(/-+/g, '-')
+                   .replace(/^-|-$/g, '');
+  if (!d || /^\d+$/.test(d)) d = 'attract';
+  return d;
+}
+
+function amReadForm() {
+  const enabled = document.getElementById('am-enable').checked;
+  const groupId = parseInt(document.getElementById('am-group').value, 10);
+  let tt = parseInt(document.getElementById('am-tt').value, 10);
+  let ee = parseInt(document.getElementById('am-ee').value, 10);
+  if (isNaN(tt) || tt < 1) tt = 1; if (tt > 99) tt = 99;
+  if (isNaN(ee) || ee < 1) ee = 1; if (ee > 99) ee = 99;
+  const desc = amSanitizeDesc(document.getElementById('am-desc').value);
+  return { enabled, groupId, tt, ee, desc };
+}
+
+function amUpdateFname() {
+  const f = amReadForm();
+  const fnEl = document.getElementById('am-fname');
+  if (!f.enabled) {
+    if (amOriginalName) {
+      fnEl.textContent = amOriginalName + ' → (will be deleted)';
+      fnEl.className = 'small text-muted mt-3 font-monospace text-warning';
+    } else {
+      fnEl.textContent = '(disabled — no file on SD)';
+      fnEl.className = 'small text-muted mt-3 font-monospace';
+    }
+    return;
+  }
+  if (isNaN(f.groupId)) {
+    fnEl.textContent = '(select a sound group)';
+    fnEl.className = 'small text-muted mt-3 font-monospace text-warning';
+    return;
+  }
+  const newName = buildAttractName(f.groupId, f.tt, f.ee, f.desc);
+  if (!amOriginalName) {
+    fnEl.textContent = 'new → ' + newName;
+    fnEl.className = 'small mt-3 font-monospace text-info';
+  } else if (newName !== amOriginalName) {
+    fnEl.textContent = amOriginalName + ' → ' + newName;
+    fnEl.className = 'small mt-3 font-monospace text-warning';
+  } else {
+    fnEl.textContent = amOriginalName;
+    fnEl.className = 'small mt-3 font-monospace text-muted';
+  }
+}
+
+function amPopulateGroupDropdown(selectedId) {
+  const sel = document.getElementById('am-group');
+  sel.innerHTML = '';
+  if (!amGroupList.length) {
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = '(no groups on SD)'; opt.disabled = true; opt.selected = true;
+    sel.appendChild(opt);
+    return;
+  }
+  for (const g of amGroupList) {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = sfPad4(g.id) + ' — ' + g.desc;
+    if (selectedId !== undefined && g.id === selectedId) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function amEnableInputs(enable) {
+  for (const id of ['am-enable','am-group','am-tt','am-ee','am-desc']) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !enable;
+  }
+}
+
+async function loadAttractMode() {
+  if (!checkConnected()) return;
+  const status = document.getElementById('am-status');
+  status.textContent = 'Loading…';
+  let files;
+  try {
+    files = await sfFetchFileList();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    showToast('Failed to load files: ' + e.message, 'danger');
+    return;
+  }
+  const norm = (files || []).map(f => typeof f === 'string' ? { name: f } : f).filter(f => f && f.name);
+
+  // collect groups for the dropdown
+  amGroupList = [];
+  for (const f of norm) {
+    if (!/\.grp$/i.test(f.name)) continue;
+    const p = parseGroupName(f.name);
+    if (!p) continue;
+    amGroupList.push({ id: p.id, desc: p.desc });
+  }
+  amGroupList.sort((a, b) => a.id - b.id);
+
+  // find attract file (there should be at most one)
+  const atrFiles = norm.filter(f => /\.atr$/i.test(f.name));
+  let parsed = null;
+  amOriginalName = null;
+  for (const f of atrFiles) {
+    const p = parseAttractName(f.name);
+    if (p) { parsed = p; amOriginalName = f.name; break; }
+  }
+
+  amEnableInputs(true);
+  const enableCb = document.getElementById('am-enable');
+  if (parsed) {
+    enableCb.checked = true;
+    amPopulateGroupDropdown(parsed.groupId);
+    document.getElementById('am-tt').value   = parsed.tt;
+    document.getElementById('am-ee').value   = parsed.ee;
+    document.getElementById('am-desc').value = parsed.desc;
+  } else {
+    enableCb.checked = false;
+    amPopulateGroupDropdown();
+  }
+
+  amUpdateFname();
+  amLoaded = true;
+  status.textContent = amOriginalName
+    ? 'Attract file found: ' + amOriginalName
+    : 'No attract file — mode disabled.';
+}
+
+async function writeAttractMode() {
+  if (!checkConnected()) return;
+  const status = document.getElementById('am-status');
+  const f = amReadForm();
+
+  if (f.enabled) {
+    if (isNaN(f.groupId)) { showToast('Select a sound group first.', 'warning'); return; }
+    if (!amGroupList.some(g => g.id === f.groupId)) {
+      showToast('Group ' + sfPad4(f.groupId) + ' does not exist.', 'danger'); return;
+    }
+  }
+
+  const target = f.enabled ? buildAttractName(f.groupId, f.tt, f.ee, f.desc) : null;
+
+  // Step 1: delete any existing .atr that isn't the target
+  status.textContent = 'Writing…';
+  try {
+    // re-list to be safe (user may have changed things)
+    const files = await sfFetchFileList();
+    const norm = (files || []).map(x => typeof x === 'string' ? { name: x } : x).filter(x => x && x.name);
+    const existingAtr = norm.filter(x => /\.atr$/i.test(x.name)).map(x => x.name);
+
+    for (const name of existingAtr) {
+      if (name === target) continue;
+      usbLog('Deleting attract file "' + name + '"', 'sys');
+      const resp = (net.mode === 'ip')
+        ? await httpDeleteFile(name)
+        : await usbSendCmd('FILE:DELETE=' + name, 5000);
+      if (!resp.startsWith('OK:')) {
+        showToast('Delete failed for ' + name + ': ' + resp, 'danger');
+        status.textContent = 'Delete failed.';
+        return;
+      }
+    }
+
+    // Step 2: upload new file if enabled and not already present
+    if (target && !existingAtr.includes(target)) {
+      usbLog('Creating attract file "' + target + '"', 'sys');
+      const bytes = new Uint8Array([0x0A]); // placeholder byte — content is ignored
+      const resp = (net.mode === 'ip')
+        ? await httpUploadFile(target, bytes)
+        : await usbUploadFile(target, bytes);
+      if (!resp.startsWith('OK:')) {
+        showToast('Upload failed: ' + resp, 'danger');
+        status.textContent = 'Upload failed.';
+        return;
+      }
+    }
+  } catch (e) {
+    usbLog('Attract write error: ' + e.message, 'err');
+    showToast('Attract write error: ' + e.message, 'danger');
+    status.textContent = 'Error.';
+    return;
+  }
+
+  showToast(target ? ('Attract mode saved: ' + target) : 'Attract mode disabled.', 'success');
+  status.textContent = target ? ('Saved: ' + target) : 'Disabled.';
+  await loadAttractMode();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  for (const id of ['am-enable','am-group','am-tt','am-ee','am-desc']) {
+    const el = document.getElementById(id);
+    if (el) {
+      const ev = (id === 'am-enable' || id === 'am-group') ? 'change' : 'input';
+      el.addEventListener(ev, amUpdateFname);
+    }
+  }
+});
 
 // ─── Update Tab ───────────────────────────────────────────────────────────────
 
@@ -2641,7 +3037,7 @@ function setStatus(state) {
 }
 
 function setDeviceButtons(on) {
-  ['btn-dl-config','btn-reboot','btn-upload-file','btn-list-files','btn-sf-refresh','btn-sf-write','btn-sg-refresh','btn-sg-add','btn-sg-write'].forEach(id => {
+  ['btn-dl-config','btn-reboot','btn-upload-file','btn-list-files','btn-sf-refresh','btn-sf-add','btn-sf-write','btn-sg-refresh','btn-sg-add','btn-sg-write','btn-am-refresh','btn-am-save'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !on;
   });
@@ -2650,6 +3046,7 @@ function setDeviceButtons(on) {
   if (bws) bws.disabled = !isConnected;
   if (!on) {
     sfLoaded = false;
+    sfEntries = [];
     const tb = document.getElementById('sf-tbody');
     if (tb) tb.innerHTML = '<tr><td colspan="9" class="small text-muted">Connect to device and click Refresh.</td></tr>';
     const st = document.getElementById('sf-status');
@@ -2661,6 +3058,14 @@ function setDeviceButtons(on) {
     if (sgl) sgl.innerHTML = '<div class="small text-muted">Connect to device and click Refresh.</div>';
     const sgs = document.getElementById('sg-status');
     if (sgs) sgs.textContent = '';
+    amLoaded = false;
+    amOriginalName = null;
+    amGroupList = [];
+    amEnableInputs(false);
+    const amst = document.getElementById('am-status');
+    if (amst) amst.textContent = '';
+    const amfn = document.getElementById('am-fname');
+    if (amfn) { amfn.textContent = 'Connect to device and click Refresh.'; amfn.className = 'small text-muted mt-3 font-monospace'; }
   }
 }
 
@@ -2696,6 +3101,11 @@ async function netStatus(ip, timeoutMs) {
 }
 
 function setDeviceMode(mode) {
+  if (mode !== 'ip' && typeof activitySetPolling === 'function') {
+    activitySetPolling(false);
+    const cb = document.getElementById('chkActivityPoll');
+    if (cb) cb.checked = false;
+  }
   net.mode = mode;
   try { localStorage.setItem('pwavplayer_mode', mode); } catch(_){}
   const usbPanel = document.getElementById('usbConnectPanel');
@@ -2772,7 +3182,74 @@ async function ipConnect() {
   }
 }
 
+// ─── Activity Log polling (IP mode only) ─────────────────────────────────────
+let activityTimer = null;
+let activityLastSeq = 0;
+let activityInFlight = false;
+
+function activityAppend(ts_ms, msg) {
+  const el = document.getElementById('activity-console');
+  if (!el) return;
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const ss = String(d.getSeconds()).padStart(2,'0');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = '<span class="log-ts">' + hh + ':' + mm + ':' + ss +
+                   '</span><span class="log-rx">' + escHtml(msg) + '</span>';
+  el.appendChild(line);
+  // keep last 500 lines
+  while (el.childNodes.length > 500) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function activityPollOnce() {
+  if (activityInFlight) return;
+  if (net.mode !== 'ip' || !net.connected) return;
+  activityInFlight = true;
+  try {
+    const r = await netFetch('/activity?since=' + activityLastSeq, null, 5000);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (Array.isArray(j.entries)) {
+      for (const e of j.entries) {
+        activityAppend(e.ts, e.msg);
+        if (e.seq > activityLastSeq) activityLastSeq = e.seq;
+      }
+    }
+    const stat = document.getElementById('activityStatus');
+    if (stat) stat.textContent = 'Polling · last seq ' + activityLastSeq;
+  } catch (e) {
+    const stat = document.getElementById('activityStatus');
+    if (stat) stat.textContent = 'Poll error: ' + e.message;
+  } finally {
+    activityInFlight = false;
+  }
+}
+
+function activitySetPolling(on) {
+  if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
+  const stat = document.getElementById('activityStatus');
+  if (on) {
+    if (net.mode !== 'ip' || !net.connected) {
+      const cb = document.getElementById('chkActivityPoll');
+      if (cb) cb.checked = false;
+      if (stat) stat.textContent = 'Activity log requires IP connection.';
+      return;
+    }
+    if (stat) stat.textContent = 'Polling…';
+    activityPollOnce();
+    activityTimer = setInterval(activityPollOnce, 1500);
+  } else {
+    if (stat) stat.textContent = 'Not polling.';
+  }
+}
+
 function ipDisconnect() {
+  activitySetPolling(false);
+  const cb = document.getElementById('chkActivityPoll');
+  if (cb) cb.checked = false;
   net.connected = false;
   net.base = '';
   net.fwVersion = null;
@@ -2936,6 +3413,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ip) { const el = document.getElementById('ipAddr'); if (el) el.value = ip; }
   } catch(_){}
   setIpStatus('disconnected');
+  const actCb = document.getElementById('chkActivityPoll');
+  if (actCb) actCb.addEventListener('change', () => activitySetPolling(actCb.checked));
+  const actClr = document.getElementById('btnActivityClear');
+  if (actClr) actClr.addEventListener('click', () => {
+    document.getElementById('activity-console').innerHTML = '';
+    activityLastSeq = 0;
+  });
 });
 
 function usbSleep(ms) { return new Promise(r => setTimeout(r, ms)); }

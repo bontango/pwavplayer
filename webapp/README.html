@@ -242,6 +242,12 @@ can switch to IP Mode without typing.</p>
 <p>The low-level USB protocol log (bytes/lines exchanged) has its own
 tab, separate from the Device tab. Useful for troubleshooting USB-mode
 issues. (IP-mode HTTP requests are logged here too for consistency.)</p>
+<p>A second log below it — <strong>Activity Log</strong> — shows
+sound-card activity reported by the device (Lookup Sound, Start Sound,
+Attract Mode, …). It is only available in <strong>IP mode</strong> and
+polls <code>GET /activity?since=&lt;seq&gt;</code> at ~1.5 s while the
+“Poll activity” checkbox is on. Polling stops automatically on
+disconnect or when switching to USB.</p>
 <h3 id="2-general">2. General</h3>
 <p>Edits <code>config.txt</code> line by line via form fields. The table
 below lists the keys; defaults match the firmware’s
@@ -354,39 +360,52 @@ attributes (loop, break, init/background, kill) in a table.</p>
 <li><strong>Refresh</strong> — re-reads the SD file list.</li>
 <li><strong>Write Soundconfig</strong> — renames files on the device so
 the filenames match the attributes you’ve set in the table.</li>
-<li>Per-row actions: <strong>Assign</strong>, play, download, rename,
-delete.</li>
+<li>Per-row actions: <strong>PC</strong> (assign from PC),
+<strong>SD</strong> (assign from SD), play.</li>
 </ul>
 <h4 id="assigning-a-wav-file-to-a-sound-slot">Assigning a WAV file to a
 sound slot</h4>
-<p>The <strong>Assign</strong> button in each row is the quickest way to
-put a new WAV file into a specific slot (ID
-<code>0001</code>–<code>0031</code>). The editor takes care of naming
-and replacing any existing file in that slot.</p>
+<p>Each row has two assign buttons — <strong>PC</strong> uploads a new
+file from your computer, <strong>SD</strong> picks an already-existing
+WAV file on the SD card and just renames it. Both derive the target
+filename from the slot ID and the source file’s base name (attributes
+default to <code>x</code> / volume <code>100</code>; edit them later via
+<em>Write Soundconfig</em>).</p>
+<p><strong>PC — upload from local disk</strong></p>
 <ol type="1">
-<li>Connect the device (<strong>Device → Connect USB</strong>) and
-switch to the <strong>Soundfiles</strong> tab.</li>
+<li>Connect the device and switch to the <strong>Soundfiles</strong>
+tab.</li>
 <li>Click <strong>Refresh</strong> so the table reflects the current SD
 card contents.</li>
-<li>In the row of the desired slot, click <strong>Assign</strong>. A
-file picker opens — choose the <code>.wav</code> file from your
+<li>In the row of the desired slot, click <strong>PC</strong>. A file
+picker opens — choose the <code>.wav</code> file from your
 computer.</li>
-<li>The editor derives the target filename from the slot ID and the
-source file’s base name, e.g. picking <code>alarm.wav</code> for slot
-<code>0005</code> produces <code>0005-xxxx-xxx-alarm.wav</code>
-(attributes default to <code>x</code> / volume <code>100</code>; edit
-them later via <em>Write Soundconfig</em>).</li>
+<li>Example: picking <code>alarm.wav</code> for slot <code>0005</code>
+produces <code>0005-xxxx-100-alarm.wav</code>.</li>
 <li>If the slot already holds a different file, you are asked to confirm
 the replacement — the old file is deleted before the new one is
-uploaded. If the target name is identical, you are asked whether to
-overwrite.</li>
-<li>The <strong>Assign</strong> button shows upload progress
-(<code>0%</code> → <code>100%</code>). On success a toast confirms the
-new filename and the table reloads automatically.</li>
-<li>Adjust attributes (loop / break / init / background / kill / volume)
-in the table and click <strong>Write Soundconfig</strong> to rename the
-file accordingly.</li>
+uploaded.</li>
+<li>The button shows upload progress (<code>0%</code> →
+<code>100%</code>). On success a toast confirms the new filename and the
+table reloads automatically.</li>
 </ol>
+<p><strong>SD — rename a file already on the card</strong></p>
+<ol type="1">
+<li>Make sure the target <code>.wav</code> file is already on the SD
+card (copied via card reader or previously uploaded).</li>
+<li>Click <strong>SD</strong> in the desired row. A modal opens with all
+<code>.wav</code> files on the SD card; files that are already assigned
+to a slot are marked.</li>
+<li>Pick a file and confirm. The editor renames it to
+<code>XXXX-xxxx-100-&lt;desc&gt;.wav</code>. No upload needed — this is
+instant.</li>
+<li>If the slot already holds a different file, it is deleted first. If
+a file with the target name already exists, you are asked whether to
+overwrite it.</li>
+</ol>
+<p>Finally, adjust attributes (loop / break / init / background / kill /
+volume) in the table and click <strong>Write Soundconfig</strong> to
+rename the files accordingly.</p>
 <blockquote>
 <p>Tip: the description part of the filename is sanitized — only
 letters, digits and dashes are kept. Special characters and spaces are
@@ -395,7 +414,60 @@ replaced with <code>-</code>.</p>
 <code>usbbaud</code> first (see <em>Faster file transfers</em>
 below).</p>
 </blockquote>
-<h3 id="4-sd-card">4. SD Card</h3>
+<h3 id="4-soundgroups">4. Soundgroups</h3>
+<p>Manage <code>.grp</code> files on the SD card. A sound group bundles
+several WAV IDs under one trigger ID; when the group is triggered, one
+member is picked randomly (<code>m</code>) or in round-robin order
+(<code>r</code>). See <code>../Groups.md</code> for the format.</p>
+<ul>
+<li><strong>Refresh</strong> — re-reads the SD file list and picks out
+all <code>.grp</code> files.</li>
+<li><strong>Add Group</strong> — appends a new (unsaved) group row with
+the next free ID.</li>
+<li><strong>Write Groups</strong> — uploads new <code>.grp</code> files
+and renames existing ones so their filenames match the ID / mode /
+members / description fields in the table.</li>
+</ul>
+<p>Per group:</p>
+<ul>
+<li><strong>ID</strong> — 4-digit trigger ID (shares the namespace with
+sound IDs; don’t reuse).</li>
+<li><strong>Mode</strong> — <code>m</code> random or <code>r</code>
+round-robin.</li>
+<li><strong>Description</strong> — free text; sanitized to
+letters/digits/hyphens on write.</li>
+<li><strong>Members</strong> — expand the collapse to see every WAV
+currently on the SD card, tick the boxes of the sounds that should
+belong to this group. The summary line shows the resulting member-ID
+list; a second line previews the resulting filename (and the pending
+rename if it differs from the current one).</li>
+<li><strong>Delete</strong> — removes the <code>.grp</code> file from
+the SD card (with confirmation). Deleting an unsaved new row just
+removes it locally.</li>
+</ul>
+<p>Since a <code>.grp</code> file’s content is ignored by the firmware,
+all state lives in the filename — changing members, mode, ID, or
+description translates to a rename on <strong>Write Groups</strong>.</p>
+<h3 id="5-attract-mode">5. Attract mode</h3>
+<p>Attract mode plays sounds from a chosen sound group at a fixed
+interval whenever the device has been idle (no regular sound triggered)
+for a configurable timeout. It is enabled by an empty file on the SD
+card named
+<code>NNNN-TT-EE-description.atr</code> where <code>NNNN</code> is the
+group ID, <code>TT</code> is the inactivity timeout in minutes and
+<code>EE</code> is the replay interval in minutes. Any regular sound
+trigger (GPIO, UART, I²C, or HTTP/USB <code>/play</code>) resets the
+timer and stops attract playback.</p>
+<ul>
+<li><strong>Enable Attract Mode</strong> — toggle controls whether the
+<code>.atr</code> file exists on the SD card.</li>
+<li><strong>Sound Group</strong> — dropdown listing all
+<code>.grp</code> files currently on the SD card.</li>
+<li><strong>Timeout / Interval</strong> — whole minutes, 1–99.</li>
+<li><strong>Save</strong> — deletes any existing <code>.atr</code> file
+and uploads a new one whose filename encodes the chosen parameters.</li>
+</ul>
+<h3 id="6-sd-card">6. SD Card</h3>
 <p>Generic file manager for the SD card root.</p>
 <ul>
 <li><strong>File list</strong> — name, size, modification time. The
@@ -410,7 +482,7 @@ operations, streamed over the serial protocol described in
 card. The <em>Overwrite existing</em> checkbox controls whether existing
 files are replaced.</li>
 </ul>
-<h3 id="5-firmware--flash">5. Firmware / Flash</h3>
+<h3 id="7-firmware--flash">7. Firmware / Flash</h3>
 <p>Two independent actions:</p>
 <ul>
 <li><strong>Fetch versions / Install server firmware</strong> —

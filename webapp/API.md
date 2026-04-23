@@ -339,7 +339,12 @@ call them from a local file.
 | POST   | `/reboot` | `{"confirm":"reboot"}` | `OK` | Triggers `esp_restart()` |
 | POST   | `/update` | binary body (.bin) | `OK` (then reboot) | Uploads firmware to `update.bin`; device flashes it on next boot |
 | POST   | `/play`   | `{"id":<num>}` | `OK` | Enqueues `{cmd='p', arg=id}` on the `xpinevt` stream buffer — same as USB `p <num>` |
+| GET    | `/activity` | — (optional `?since=<seq>`) | `{"next":N,"entries":[{"seq":S,"ts":ms,"msg":"..."}]}` | Recent sound-card activity (Lookup Sound, Start Sound, Attract Mode, …). Ring buffer of up to 64 entries; pass `since=<last seq>` to only receive new events |
 | OPTIONS | `/*`     | — | `204 No Content` | CORS preflight |
+
+The editor's Debug tab uses `/activity` to drive an "Activity Log" view while
+connected over IP. USB transport does not consume this — USB users see the
+same information in the regular serial console output.
 
 ### Path-traversal protection
 

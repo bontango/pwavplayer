@@ -66,6 +66,11 @@ The low-level USB protocol log (bytes/lines exchanged) has its own tab, separate
 the Device tab. Useful for troubleshooting USB-mode issues. (IP-mode HTTP requests are
 logged here too for consistency.)
 
+A second log below it — **Activity Log** — shows sound-card activity reported by the
+device (Lookup Sound, Start Sound, Attract Mode, …). It is only available in **IP
+mode** and polls `GET /activity?since=<seq>` at ~1.5 s while the "Poll activity"
+checkbox is on. Polling stops automatically on disconnect or when switching to USB.
+
 ### 2. General
 
 Edits `config.txt` line by line via form fields. The table below lists the keys; defaults
