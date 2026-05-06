@@ -36,6 +36,10 @@ Die Datei `config.txt` muss im Wurzelverzeichnis der SD-Karte liegen. Jede Zeile
 | `ser` | `none`, `uart`, `i2c` | `none` | Serielle Schnittstelle für Sound-Kommandos |
 | `addr` | Hex-Zahl | `0x66` | I2C-Slave-Adresse (nur wenn `ser=i2c`) |
 | `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baudrate des USB-Config-Editor-Ports (UART0) |
+| `stheme` | String | `orgsnd` | Aktives Sound-Theme-Verzeichnis unterhalb der SD-Wurzel (Sounds und Gruppen werden von dort geladen) |
+| `log` | `no`, `yes`, `only` | `no` | Persistentes Eventlog auf SD (`log.txt`); `only` schreibt das Log, unterdrückt aber die Audiowiedergabe |
+| `volv` | 0–100 | `100` | Skalierung der Voice-Lautstärke in % (gilt für Dateien mit Attribut `v`) |
+| `vols` | 0–100 | `100` | Skalierung der Sound-Lautstärke in % (gilt für Nicht-Voice-Dateien) |
 | `wifi_enable` | `yes`, `no` | `no` | Aktiviert STA-WLAN und HTTP-Server auf Port 8080 |
 | `wifi_ssid` | String | *(leer)* | WLAN-SSID — erforderlich bei `wifi_enable=yes` |
 | `wifi_pwd` | String | *(leer)* | WLAN-Passwort |
@@ -113,7 +117,9 @@ UART und I2C verwenden dieselben GPIO-Pins und schließen sich gegenseitig aus.
 
 ## Benennung von Sound-Dateien
 
-Sound-Dateien liegen im Wurzelverzeichnis der SD-Karte und folgen diesem Namensschema:
+Sound-Dateien liegen im aktiven Sound-Theme-Verzeichnis der SD-Karte
+(`<sdroot>/<stheme>/`, Standard `<sdroot>/orgsnd/`) und folgen diesem
+Namensschema:
 
 ```
 NNNN-AAAA-VVV-beschreibung.wav
@@ -122,25 +128,30 @@ NNNN-AAAA-VVV-beschreibung.wav
 | Feld | Beschreibung |
 |------|--------------|
 | `NNNN` | 4-stellige numerische ID (z. B. `0012`) |
-| `AAAA` | 4 Attributzeichen (s. Tabelle unten) |
+| `AAAA` | 4 Attributzeichen (s. Tabelle unten); ungenutzte Stellen mit `x` auffüllen |
 | `VVV` | Lautstärke 0–100 |
 | `beschreibung` | Beliebiger Textname (kann Bindestriche enthalten) |
 
-**Beispiel:** `0012-xbxx-100-ring-my-bell.wav`
+**Beispiel:** `0012-bxxx-100-ring-my-bell.wav`
 
-### Attribute (Position 1–4)
+### Attribute
 
-| Position | Zeichen | Bedeutung |
-|----------|---------|-----------|
-| 1 | `l` | Loop – Datei wird endlos wiederholt |
-| 1 | `x` | Kein Loop |
-| 2 | `b` | Break – laufende Instanz desselben Sounds wird gestoppt, bevor neu gestartet wird |
-| 2 | `x` | Kein Break |
-| 3 | `i` | Init/Hintergrund – wird beim Start automatisch abgespielt; wenn auch `l` (Pos. 1) gesetzt, als Hintergrundmusik-Loop |
-| 3 | `x` | Kein Init-Sound |
-| 4 | `k` | Kill – alle laufenden Tracks werden gestoppt, bevor dieser Sound startet |
-| 4 | `c` | Soft-Kill – alle Tracks außer Init/Hintergrund werden gestoppt |
-| 4 | `x` | Kein Kill |
+Die 4 Attributzeichen sind **positionsunabhängig** — die Reihenfolge spielt keine
+Rolle, jedes Zeichen darf höchstens einmal vorkommen. Mit `x` auf vier Stellen
+auffüllen.
+
+| Zeichen | Bedeutung |
+|---------|-----------|
+| `l` | Loop — Datei wird endlos wiederholt |
+| `b` | Break — laufende Instanz desselben Sounds wird gestoppt, bevor neu gestartet wird |
+| `i` | Init/Hintergrund — wird beim Start automatisch abgespielt; wenn auch `l` gesetzt, als Hintergrundmusik-Loop |
+| `v` | Voice — verwendet `volv` (Voice-Lautstärke) statt `vols` |
+| `k` | Kill — alle laufenden Tracks werden gestoppt, bevor dieser Sound startet |
+| `c` | Soft-Kill — alle Tracks außer Init/Hintergrund werden gestoppt |
+| `q` | Quit — Soft-Kill, der Loops und Voice-Sounds erhält |
+| `x` | Platzhalter (kein Attribut) |
+
+`k`, `c` und `q` schließen sich gegenseitig aus — pro Datei nur ein Kill-Modus.
 
 ---
 
@@ -148,7 +159,8 @@ NNNN-AAAA-VVV-beschreibung.wav
 
 Gruppen fassen mehrere Sounds zusammen. Beim Aufruf der Gruppen-ID wird ein Mitglied ausgewählt und abgespielt.
 
-Gruppen-Dateien liegen ebenfalls im Wurzelverzeichnis der SD-Karte:
+Gruppen-Dateien liegen ebenfalls im aktiven Theme-Verzeichnis
+(`<sdroot>/<stheme>/`):
 
 ```
 NNNN-A-M1-M2-M3-beschreibung.grp

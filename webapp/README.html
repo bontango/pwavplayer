@@ -448,26 +448,7 @@ removes it locally.</li>
 <p>Since a <code>.grp</code> file’s content is ignored by the firmware,
 all state lives in the filename — changing members, mode, ID, or
 description translates to a rename on <strong>Write Groups</strong>.</p>
-<h3 id="5-attract-mode">5. Attract mode</h3>
-<p>Attract mode plays sounds from a chosen sound group at a fixed
-interval whenever the device has been idle (no regular sound triggered)
-for a configurable timeout. It is enabled by an empty file on the SD
-card named
-<code>NNNN-TT-EE-description.atr</code> where <code>NNNN</code> is the
-group ID, <code>TT</code> is the inactivity timeout in minutes and
-<code>EE</code> is the replay interval in minutes. Any regular sound
-trigger (GPIO, UART, I²C, or HTTP/USB <code>/play</code>) resets the
-timer and stops attract playback.</p>
-<ul>
-<li><strong>Enable Attract Mode</strong> — toggle controls whether the
-<code>.atr</code> file exists on the SD card.</li>
-<li><strong>Sound Group</strong> — dropdown listing all
-<code>.grp</code> files currently on the SD card.</li>
-<li><strong>Timeout / Interval</strong> — whole minutes, 1–99.</li>
-<li><strong>Save</strong> — deletes any existing <code>.atr</code> file
-and uploads a new one whose filename encodes the chosen parameters.</li>
-</ul>
-<h3 id="6-sd-card">6. SD Card</h3>
+<h3 id="5-sd-card">5. SD Card</h3>
 <p>Generic file manager for the SD card root.</p>
 <ul>
 <li><strong>File list</strong> — name, size, modification time. The
@@ -482,7 +463,7 @@ operations, streamed over the serial protocol described in
 card. The <em>Overwrite existing</em> checkbox controls whether existing
 files are replaced.</li>
 </ul>
-<h3 id="7-firmware--flash">7. Firmware / Flash</h3>
+<h3 id="6-firmware--flash">6. Firmware / Flash</h3>
 <p>Two independent actions:</p>
 <ul>
 <li><strong>Fetch versions / Install server firmware</strong> —

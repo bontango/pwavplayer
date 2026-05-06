@@ -103,7 +103,8 @@ Device TX:  BINDATA:BEGIN=<size>\r\n
 ```
 
 **Firmware implementation:**
-- Open `/<filename>` on SD card (SPIFFS/FAT mount point)
+- Resolve `<filename>` via `cmdapi_resolve_path()` — accepts `<file>` (SD root) or
+  `<theme>/<file>` (one level into a sound-theme directory)
 - Read all bytes, base64-encode in 144-byte chunks
 - Send as BINDATA frame
 - If file not found: `ERR:FILE_NOT_FOUND\r\n`
@@ -124,7 +125,8 @@ Device TX:  OK:FILE_SAVED\r\n
 
 **Firmware implementation:**
 - Wait for BINDATA frame after receiving this command
-- Decode base64, write bytes to `/<filename>` on SD card
+- Resolve `<filename>` via `cmdapi_resolve_path()` (root or `<theme>/<file>`)
+- Decode base64, write bytes to the resolved path on SD card
 - Acknowledge every 8 chunks with `OK:CHUNK_ACK\r\n`
 - Respond `OK:FILE_SAVED\r\n` after `BINDATA:END`
 - On write error: `ERR:WRITE_FAILED\r\n`
@@ -135,31 +137,50 @@ Device TX:  OK:FILE_SAVED\r\n
 
 ### 4. FILE:LIST
 
-**Purpose:** List all files in the SD card root directory.
+**Purpose:** List all files visible to the editor — the SD card root **plus** the active
+sound-theme directory (`stheme` from `config.txt`, default `orgsnd`).
 
 ```
 Editor TX:  FILE:LIST\r\n
 Device TX:  DATA:BEGIN=<size>\r\n
-            {"files":[{"name":"0001.wav","size":44100,"mtime":1743600000},{"name":"config.txt","size":64,"mtime":1743600060}]}\r\n
+            {"theme":"orgsnd","files":[
+              {"name":"config.txt","dir":"","size":64,"mtime":1743600060},
+              {"name":"orgsnd","dir":"","size":0,"mtime":0,"type":"dir"},
+              {"name":"0001-xxxx-100-bell.wav","dir":"orgsnd","size":44100,"mtime":0}
+            ]}\r\n
             DATA:END\r\n
 ```
 
-**Firmware implementation:**
-- Open SD card root directory
-- Iterate all files (skip subdirectories)
-- Use `stat()` to obtain `st_size` and `st_mtime` (Unix seconds) for each file
-- Build JSON array with `name`, `size` (bytes), and `mtime` (Unix timestamp) for each file
-- Send as DATA text frame
-- If SD card not mounted: `ERR:SD_NOT_MOUNTED\r\n`
+**Fields per entry:**
 
-**Note:** `mtime` is only meaningful if the device clock has been set via `SET:TIME` before
-the files were written. The editor sends `SET:TIME` automatically after connecting.
+| Field | Meaning |
+|-------|---------|
+| `name` | Bare filename, no path |
+| `dir`  | Empty string for root entries; theme name for theme entries |
+| `size` | Bytes (`0` if `stat()` was skipped — see below) |
+| `mtime`| Unix timestamp (`0` if `stat()` was skipped) |
+| `type` | Present and equal to `"dir"` for directory entries (root only) |
 
-**Fallback format** (if JSON is inconvenient): one file per line, tab-separated name and size:
-```
-0001.wav\t44100\r\n
-config.txt\t64\r\n
-```
+**Top-level fields:**
+
+| Field | Meaning |
+|-------|---------|
+| `theme` | Name of the active sound-theme directory (`gconfsd`) |
+| `files` | Array of entries from root + theme dir |
+
+**Firmware implementation** (`cmdapi_file_list_json` in `main/cmdapi.c`):
+- Iterate the SD root: regular files **and** directories (so the editor can see all
+  themes). `stat()` is called per entry — root holds few items.
+- Iterate the active theme directory (`<sdroot>/<gconfsd>`): regular files only.
+  `stat()` is **skipped** here for performance — FAT32 `stat()` rescans the directory
+  on each call, which is prohibitive for theme dirs with hundreds of WAVs. The
+  editor tolerates `size`/`mtime` being `0` for these entries.
+- Send as DATA text frame.
+- If SD card not mounted: `ERR:SD_NOT_MOUNTED\r\n`.
+
+**Note:** `mtime` is only meaningful when populated AND if the device clock has been set
+via `SET:TIME` before the files were written. The editor sends `SET:TIME` automatically
+after connecting.
 
 ---
 
@@ -174,9 +195,15 @@ Device TX:  OK:FILE_DELETED\r\n
 ```
 
 **Firmware implementation:**
-- Validate filename with `cmdapi_resolve_path()` (rejects `..`, `/`, `\`)
+- Validate filename with `cmdapi_resolve_path()` (accepts `<file>` for root or
+  `<theme>/<file>` for one level into a sound-theme directory; rejects `..`,
+  `\`, and nested paths beyond a single `/` separator)
 - Call `remove(fpath)` to delete the file
 - Respond `OK:FILE_DELETED` on success, `ERR:DELETE_FAILED` on error
+
+**Theme-aware path:** Files in the active sound-theme directory are addressed as
+`<theme>/<file>`, e.g. `orgsnd/0001-xxxx-100-bell.wav`. Plain filenames refer to
+the SD root.
 
 ---
 
@@ -331,11 +358,11 @@ call them from a local file.
 | GET    | `/status` | — | `{"status":"ok","version":"<fw>","api_version":1}` | Health + firmware version |
 | GET    | `/config` | — | `text/plain` | Streams `config.txt` from SD |
 | POST   | `/config` | `text/plain` body | `OK` | Writes body to `/sdcard/config.txt` |
-| GET    | `/files` | — | JSON array: `[{"name":"...","size":N,"mtime":T}, ...]` | SD root listing |
-| GET    | `/files/<name>` | — | `application/octet-stream` | Downloads the named file |
-| PUT    | `/files/<name>` | binary body | `OK` | Uploads / overwrites the file |
-| DELETE | `/files/<name>` | — | `OK` | Deletes the file |
-| POST   | `/rename` | `{"old_name":"a","new_name":"b"}` | `OK` | Renames a file on SD |
+| GET    | `/files` | — | `{"theme":"<name>","files":[{"name":"...","dir":"...","size":N,"mtime":T,"type":"dir"?}, ...]}` | SD root + active theme dir listing |
+| GET    | `/files/<name>` | — | `application/octet-stream` | Downloads the named file (`<file>` or `<theme>/<file>`) |
+| PUT    | `/files/<name>` | binary body | `OK` | Uploads / overwrites the file (`<file>` or `<theme>/<file>`) |
+| DELETE | `/files/<name>` | — | `OK` | Deletes the file (`<file>` or `<theme>/<file>`) |
+| POST   | `/rename` | `{"old_name":"a","new_name":"b"}` | `OK` | Renames a file on SD; either name may be `<theme>/<file>` |
 | POST   | `/reboot` | `{"confirm":"reboot"}` | `OK` | Triggers `esp_restart()` |
 | POST   | `/update` | binary body (.bin) | `OK` (then reboot) | Uploads firmware to `update.bin`; device flashes it on next boot |
 | POST   | `/play`   | `{"id":<num>}` | `OK` | Enqueues `{cmd='p', arg=id}` on the `xpinevt` stream buffer — same as USB `p <num>` |
@@ -348,8 +375,20 @@ same information in the regular serial console output.
 
 ### Path-traversal protection
 
-`/files/<name>` routes reuse `cmdapi_resolve_path()`, which rejects `..`, `/` and `\`
-in the filename component. The same helper is used by the USB file handlers.
+`/files/<name>` routes reuse `cmdapi_resolve_path()`, which accepts at most one `/`
+separator (so `<theme>/<file>` works for sound-theme files) and rejects `..` runs
+and `\`. Plain filenames address the SD root. The same helper is used by the USB
+file handlers.
+
+### Server-side timeouts
+
+`httpserver_start()` raises the `esp_http_server` defaults to make the editor
+robust under WiFi retransmits and CORS preflight contention:
+
+- `recv_wait_timeout = 30 s` (default 5 s)
+- `send_wait_timeout = 30 s` (default 5 s)
+- `lru_purge_enable = true` — a leaked keep-alive socket from a previous editor
+  session won't lock out a fresh request when all socket slots are in use.
 
 ### Progress
 

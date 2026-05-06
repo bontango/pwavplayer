@@ -36,6 +36,10 @@ The file `config.txt` must be placed in the root directory of the SD card. Each 
 | `ser` | `none`, `uart`, `i2c` | `none` | Serial interface for sound commands |
 | `addr` | hex value | `0x66` | I2C slave address (only when `ser=i2c`) |
 | `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baud rate of the USB config-editor port (UART0) |
+| `stheme` | string | `orgsnd` | Active sound-theme directory under the SD root (sounds and groups are loaded from there) |
+| `log` | `no`, `yes`, `only` | `no` | Persistent event log on SD (`log.txt`); `only` writes the log but suppresses audio playback |
+| `volv` | 0–100 | `100` | Voice-class volume scaling in % (applied to files with attribute `v`) |
+| `vols` | 0–100 | `100` | Sound-class volume scaling in % (applied to non-voice files) |
 | `wifi_enable` | `yes`, `no` | `no` | Enables STA-mode WiFi and the HTTP server on port 8080 |
 | `wifi_ssid` | string | *(empty)* | WiFi network SSID — required if `wifi_enable=yes` |
 | `wifi_pwd` | string | *(empty)* | WiFi password |
@@ -113,7 +117,8 @@ UART and I2C share the same GPIO pins and are mutually exclusive.
 
 ## Sound File Naming
 
-Sound files are placed in the root directory of the SD card and follow this naming scheme:
+Sound files are placed in the active sound-theme directory of the SD card
+(`<sdroot>/<stheme>/`, default `<sdroot>/orgsnd/`) and follow this naming scheme:
 
 ```
 NNNN-AAAA-VVV-description.wav
@@ -122,25 +127,29 @@ NNNN-AAAA-VVV-description.wav
 | Field | Description |
 |-------|-------------|
 | `NNNN` | 4-digit numeric ID (e.g. `0012`) |
-| `AAAA` | 4 attribute characters (see table below) |
+| `AAAA` | 4 attribute characters (see table below); pad unused positions with `x` |
 | `VVV` | Volume 0–100 |
 | `description` | Any text label (may contain hyphens) |
 
-**Example:** `0012-xbxx-100-ring-my-bell.wav`
+**Example:** `0012-bxxx-100-ring-my-bell.wav`
 
-### Attributes (positions 1–4)
+### Attributes
 
-| Position | Character | Meaning |
-|----------|-----------|---------|
-| 1 | `l` | Loop – file repeats indefinitely |
-| 1 | `x` | No loop |
-| 2 | `b` | Break – a running instance of the same sound is stopped before restarting |
-| 2 | `x` | No break |
-| 3 | `i` | Init/background – played automatically on startup; if `l` (pos. 1) is also set, acts as a background music loop |
-| 3 | `x` | No init sound |
-| 4 | `k` | Kill – all running tracks are stopped before this sound starts |
-| 4 | `c` | Soft-kill – all tracks except init/background are stopped |
-| 4 | `x` | No kill |
+The 4 attribute characters are **position-independent** — order does not matter,
+and each character may appear at most once. Pad with `x` to fill four positions.
+
+| Character | Meaning |
+|-----------|---------|
+| `l` | Loop — file repeats indefinitely |
+| `b` | Break — a running instance of the same sound is stopped before restarting |
+| `i` | Init/background — played automatically on startup; if `l` is also set, acts as a background music loop |
+| `v` | Voice — uses `volv` (voice volume) instead of `vols` for volume scaling |
+| `k` | Kill — all running tracks are stopped before this sound starts |
+| `c` | Soft-kill — all tracks except init/background are stopped |
+| `q` | Quit — soft-kill that preserves looping sounds and voices |
+| `x` | Placeholder (no attribute) |
+
+`k`, `c`, and `q` are mutually exclusive — only one kill mode per file.
 
 ---
 
@@ -148,7 +157,8 @@ NNNN-AAAA-VVV-description.wav
 
 Groups combine multiple sounds. When a group ID is triggered, one member is selected and played.
 
-Group files are also placed in the root directory of the SD card:
+Group files are placed alongside the sound files in the active theme directory
+(`<sdroot>/<stheme>/`):
 
 ```
 NNNN-A-M1-M2-M3-description.grp

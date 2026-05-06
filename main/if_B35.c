@@ -82,7 +82,7 @@ static bool B35_alarm_cb(gptimer_handle_t timer, const gptimer_alarm_event_data_
 // Task to handle strobe-triggered binary encoded events for Bally -35
 //
 
-void EncEventB35(void *pvParameters) {
+void B35If(void *pvParameters) {
 
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT,

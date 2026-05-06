@@ -20,76 +20,150 @@ static const char *TAG = "API";
 
 // Defined in wavplayer.c
 extern const char mount_point[];
+extern char gconfsd[];   // active sound-theme directory name
 
 
 //----------------------------------------------------------------------------------------
 // cmdapi_resolve_path
+//
+// Accepts one of:
+//   "<file>"            → /sdcard/<file>            (root file)
+//   "<theme>/<file>"    → /sdcard/<theme>/<file>    (sound-theme file)
+//
+// Both segments must be free of "..", '/', '\\'.  At most one '/' separator.
 //----------------------------------------------------------------------------------------
+static int seg_is_safe(const char *s, size_t len) {
+    if (len == 0) return 0;
+    for (size_t i = 0; i < len; i++) {
+        char c = s[i];
+        if (c == '/' || c == '\\') return 0;
+    }
+    if (len >= 2 && s[0] == '.' && s[1] == '.') return 0;
+    // "..xxx" is fine; only the literal ".." run anywhere is unsafe
+    for (size_t i = 0; i + 1 < len; i++) {
+        if (s[i] == '.' && s[i+1] == '.') return 0;
+    }
+    return 1;
+}
+
 esp_err_t cmdapi_resolve_path(const char *fname, char *out, size_t out_len) {
     if (!fname || !*fname) return ESP_ERR_INVALID_ARG;
-    // Reject path traversal and directory separators
-    if (strstr(fname, "..") || strchr(fname, '/') || strchr(fname, '\\')) {
+    const char *slash = strchr(fname, '/');
+    if (strchr(fname, '\\')) {
         ESP_LOGW(TAG, "Rejected unsafe filename: %s", fname);
         return ESP_ERR_INVALID_ARG;
     }
-    int n = snprintf(out, out_len, "%s/%s", mount_point, fname);
+    int n;
+    if (slash == NULL) {
+        if (!seg_is_safe(fname, strlen(fname))) {
+            ESP_LOGW(TAG, "Rejected unsafe filename: %s", fname);
+            return ESP_ERR_INVALID_ARG;
+        }
+        n = snprintf(out, out_len, "%s/%s", mount_point, fname);
+    } else {
+        // exactly one slash allowed
+        if (strchr(slash + 1, '/')) {
+            ESP_LOGW(TAG, "Rejected nested path: %s", fname);
+            return ESP_ERR_INVALID_ARG;
+        }
+        size_t tlen = (size_t)(slash - fname);
+        const char *file = slash + 1;
+        if (!seg_is_safe(fname, tlen) || !seg_is_safe(file, strlen(file))) {
+            ESP_LOGW(TAG, "Rejected unsafe path: %s", fname);
+            return ESP_ERR_INVALID_ARG;
+        }
+        n = snprintf(out, out_len, "%s/%.*s/%s", mount_point, (int)tlen, fname, file);
+    }
     if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
     return ESP_OK;
 }
 
 
 //----------------------------------------------------------------------------------------
-// cmdapi_file_list_json
+// list_directory_into  — append entries of one directory to the JSON buffer.
+// `subdir` is "" for root, or the theme name for /sdcard/<theme>.
+// Writes regular files only; directory entries at the root level get type "dir".
 //----------------------------------------------------------------------------------------
-esp_err_t cmdapi_file_list_json(char **json_out) {
-    *json_out = NULL;
+static esp_err_t list_directory_into(char **buf_io, size_t *bufsz_io, int *pos_io,
+                                     bool *first_io, const char *subdir,
+                                     bool include_dirs, bool with_stat)
+{
+    char dpath[256];
+    if (subdir[0] == '\0')
+        snprintf(dpath, sizeof(dpath), "%s", mount_point);
+    else
+        snprintf(dpath, sizeof(dpath), "%s/%s", mount_point, subdir);
 
-    DIR *d = opendir(mount_point);
+    DIR *d = opendir(dpath);
     if (!d) {
-        ESP_LOGW(TAG, "Cannot open dir: %s", mount_point);
-        return ESP_ERR_NOT_FOUND;
+        ESP_LOGW(TAG, "Cannot open dir: %s", dpath);
+        return ESP_OK;  // missing dir is not fatal — caller may have other dirs
     }
-
-    // Start with a reasonable buffer; grow as needed
-    size_t bufsz = 512;
-    char  *buf   = malloc(bufsz);
-    if (!buf) { closedir(d); return ESP_ERR_NO_MEM; }
-
-    int pos = snprintf(buf, bufsz, "{\"files\":[");
-    bool first = true;
 
     struct dirent *e;
     while ((e = readdir(d)) != NULL) {
-        if (e->d_type != DT_REG) continue;  // skip subdirectories
+        bool is_dir = (e->d_type == DT_DIR);
+        if (!is_dir && e->d_type != DT_REG) continue;
+        if (is_dir && !include_dirs) continue;
 
-        // Get file size and mtime via stat()
-        char fpath[512];
-        snprintf(fpath, sizeof(fpath), "%s/%s", mount_point, e->d_name);
-        struct stat st;
+        // stat() is expensive on FAT32 (each call rescans the directory).  Only
+        // call it for small directories (root) where the editor displays size/
+        // mtime; skip for theme dirs which can hold hundreds of WAVs.
         long fsz = 0;
         long fmtime = 0;
-        if (stat(fpath, &st) == 0) {
-            fsz    = (long)st.st_size;
-            fmtime = (long)st.st_mtime;
+        if (with_stat) {
+            char fpath[512];
+            if (subdir[0] == '\0')
+                snprintf(fpath, sizeof(fpath), "%s/%s", mount_point, e->d_name);
+            else
+                snprintf(fpath, sizeof(fpath), "%s/%s/%s", mount_point, subdir, e->d_name);
+            struct stat st;
+            if (stat(fpath, &st) == 0) {
+                fsz    = (long)st.st_size;
+                fmtime = (long)st.st_mtime;
+            }
         }
 
-        // Ensure buffer has space for this entry
-        size_t need = (size_t)pos + strlen(e->d_name) + 64;
-        if (need >= bufsz) {
-            bufsz = need + 256;
-            char *nb = realloc(buf, bufsz);
-            if (!nb) { free(buf); closedir(d); return ESP_ERR_NO_MEM; }
-            buf = nb;
+        size_t need = (size_t)*pos_io + strlen(e->d_name) + strlen(subdir) + 96;
+        if (need >= *bufsz_io) {
+            size_t nsz = need + 256;
+            char *nb = realloc(*buf_io, nsz);
+            if (!nb) { closedir(d); return ESP_ERR_NO_MEM; }
+            *buf_io = nb;
+            *bufsz_io = nsz;
         }
 
-        if (!first) buf[pos++] = ',';
-        pos += snprintf(buf + pos, bufsz - pos,
-                        "{\"name\":\"%s\",\"size\":%ld,\"mtime\":%ld}", e->d_name, fsz, fmtime);
-        first = false;
+        if (!*first_io) (*buf_io)[(*pos_io)++] = ',';
+        *pos_io += snprintf(*buf_io + *pos_io, *bufsz_io - *pos_io,
+                            "{\"name\":\"%s\",\"dir\":\"%s\",\"size\":%ld,\"mtime\":%ld%s}",
+                            e->d_name, subdir, fsz, fmtime,
+                            is_dir ? ",\"type\":\"dir\"" : "");
+        *first_io = false;
     }
     closedir(d);
+    return ESP_OK;
+}
 
-    // Final closing brackets
+esp_err_t cmdapi_file_list_json(char **json_out) {
+    *json_out = NULL;
+
+    size_t bufsz = 1024;
+    char  *buf   = malloc(bufsz);
+    if (!buf) return ESP_ERR_NO_MEM;
+
+    int  pos   = snprintf(buf, bufsz, "{\"theme\":\"%s\",\"files\":[", gconfsd);
+    bool first = true;
+
+    // Root: include regular files AND directories (so editor sees themes).
+    // stat() each entry — root holds few files and the editor shows size/mtime.
+    esp_err_t r = list_directory_into(&buf, &bufsz, &pos, &first, "", true, true);
+    if (r != ESP_OK) { free(buf); return r; }
+    // Active theme directory: only regular files, skip stat() for speed.
+    if (gconfsd[0]) {
+        r = list_directory_into(&buf, &bufsz, &pos, &first, gconfsd, false, false);
+        if (r != ESP_OK) { free(buf); return r; }
+    }
+
     if ((size_t)(pos + 8) >= bufsz) {
         bufsz = (size_t)pos + 8;
         char *nb = realloc(buf, bufsz);

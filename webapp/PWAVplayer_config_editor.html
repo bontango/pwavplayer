@@ -142,7 +142,7 @@
 <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-dark bg-dark px-3 py-2">
   <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
-    <small class="text-secondary fw-normal">v1.06</small>
+    <small class="text-secondary fw-normal">v1.07</small>
   </span>
   <span id="currentFileName" class="text-secondary text-truncate mx-auto"
         style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
@@ -402,6 +402,50 @@
             </div>
           </div>
 
+          <!-- stheme -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">stheme</label>
+            <div class="col-sm-8">
+              <input type="text" class="form-control form-control-sm font-monospace" id="cfg-stheme"
+                     value="orgsnd" placeholder="orgsnd" maxlength="32" style="max-width:240px;">
+              <div class="form-text">Sound theme directory (subfolder of SD root containing all .wav/.grp/.atr files).
+                Default <code>orgsnd</code>. Created automatically on boot if missing.</div>
+            </div>
+          </div>
+
+          <!-- volv -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">volv</label>
+            <div class="col-sm-8">
+              <input type="number" class="form-control form-control-sm" id="cfg-volv"
+                     value="100" min="0" max="200" style="max-width:120px;">
+              <div class="form-text">Voice volume scaling (%) — applied to soundfiles with the <code>v</code> attribute.</div>
+            </div>
+          </div>
+
+          <!-- vols -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">vols</label>
+            <div class="col-sm-8">
+              <input type="number" class="form-control form-control-sm" id="cfg-vols"
+                     value="100" min="0" max="200" style="max-width:120px;">
+              <div class="form-text">Sound volume scaling (%) — applied to all non-voice soundfiles.</div>
+            </div>
+          </div>
+
+          <!-- log -->
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">log</label>
+            <div class="col-sm-8">
+              <select class="form-select form-select-sm" id="cfg-log" style="max-width:240px;">
+                <option value="no" selected>no — disabled</option>
+                <option value="yes">yes — append events to /log.txt</option>
+                <option value="only">only — log events, suppress audio</option>
+              </select>
+              <div class="form-text">Persistent event log written to <code>/log.txt</code> on the SD card.</div>
+            </div>
+          </div>
+
           <!-- usbbaud -->
           <div class="mb-3 row">
             <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">usbbaud</label>
@@ -486,17 +530,14 @@
             <tr>
               <th style="width:100px;">Assign</th>
               <th style="width:90px;">ID</th>
-              <th style="width:130px;" title="Loop (position 1):&#10;l — file repeats indefinitely&#10;x — no loop">Loop</th>
-              <th style="width:130px;" title="Break (position 2):&#10;b — a running instance of the same sound is stopped before restarting&#10;x — no break">Break</th>
-              <th style="width:130px;" title="Init / background (position 3):&#10;i — played automatically on startup; if l (pos. 1) is also set, acts as a background music loop&#10;x — no init sound">Init</th>
-              <th style="width:130px;" title="Kill (position 4):&#10;k — all running tracks are stopped before this sound starts&#10;c — soft-kill: all tracks except init/background are stopped&#10;x — no kill">Kill</th>
+              <th title="Attributes — order-independent, max 4 of:&#10;l = loop&#10;b = break (restart same sound)&#10;i = init / background&#10;v = voice (uses volv volume)&#10;k = kill all running tracks&#10;c = soft-kill (keeps init/background)&#10;q = quit (keeps loops + voices)&#10;k / c / q are mutually exclusive">Attributes</th>
               <th style="width:90px;" title="Volume 0–100">Vol</th>
               <th>Description</th>
               <th style="width:80px;"></th>
             </tr>
           </thead>
           <tbody id="sf-tbody">
-            <tr><td colspan="9" class="small text-muted">Connect to device and click Refresh.</td></tr>
+            <tr><td colspan="6" class="small text-muted">Connect to device and click Refresh.</td></tr>
           </tbody>
         </table>
       </div>
@@ -745,6 +786,13 @@ let _ackTimer   = null;  // timeout handle
 
 let isConnected = false;
 let configLoaded = false;
+
+// Active sound theme (subfolder of SD root holding .wav/.grp/.atr).  Updated on
+// every successful /files listing.  Empty string means "no theme reported"
+// (legacy firmware).  Helper `themePath(name)` produces the on-device path.
+let activeTheme = '';
+function pathFor(name, dir) { return (dir && dir.length) ? dir + '/' + name : name; }
+function themePath(name)    { return pathFor(name, activeTheme); }
 
 // File System Access API handle (if available)
 let fsFileHandle = null;
@@ -1301,6 +1349,7 @@ async function listFiles() {
     let files;
     try {
       const data = JSON.parse(jsonText);
+      if (!Array.isArray(data) && typeof data.theme === 'string') activeTheme = data.theme;
       files = Array.isArray(data) ? data : (data.files || []);
     } catch (_) {
       files = jsonText.trim().split('\n').filter(Boolean).map(l => {
@@ -1318,25 +1367,48 @@ async function listFiles() {
 
 function renderFileList(container, files) {
   if (!files || !files.length) { container.textContent = 'No files on SD card.'; return; }
+  const sorted = files.slice().sort((a, b) => {
+    const da = (typeof a === 'object' && a.dir) ? a.dir : '';
+    const db = (typeof b === 'object' && b.dir) ? b.dir : '';
+    if (da !== db) return da.localeCompare(db);
+    const na = typeof a === 'string' ? a : a.name;
+    const nb = typeof b === 'string' ? b : b.name;
+    return na.localeCompare(nb);
+  });
   const tbl = document.createElement('table');
   tbl.className = 'table table-sm table-hover mb-0';
-  tbl.innerHTML = '<thead><tr><th>Filename</th><th>Size</th><th>Date</th><th></th></tr></thead>';
+  tbl.innerHTML = '<thead><tr><th>Dir</th><th>Filename</th><th>Size</th><th>Date</th><th></th></tr></thead>';
   const tb = document.createElement('tbody');
-  for (const f of files) {
+  for (const f of sorted) {
     const name  = typeof f === 'string' ? f : f.name;
-    const size  = typeof f === 'string' ? '' : formatSize(f.size);
+    const dir   = (typeof f === 'object' && f.dir) ? f.dir : '';
+    const isDir = (typeof f === 'object' && f.type === 'dir');
+    const size  = typeof f === 'string' ? '' : (isDir ? '' : formatSize(f.size));
     const date  = (typeof f === 'object' && f.mtime) ? formatDate(f.mtime) : '';
+    const full  = pathFor(name, dir);
     const nameQ = escHtml(name);
+    const fullQ = escHtml(full);
+    const dirLabel = dir ? escHtml(dir) : (isDir ? '<span class="text-muted">(theme)</span>' : '<span class="text-muted">/</span>');
     const tr = document.createElement('tr');
-    tr.innerHTML =
-      `<td class="font-monospace small">${nameQ}</td>` +
-      `<td class="small text-muted">${escHtml(size)}</td>` +
-      `<td class="small text-muted">${escHtml(date)}</td>` +
-      `<td class="d-flex gap-1">` +
-        `<button class="btn btn-outline-secondary btn-sm" onclick="downloadSdFile('${nameQ}', event)">Download</button>` +
-        `<button class="btn btn-outline-secondary btn-sm" onclick="renameFile('${nameQ}')">Rename</button>` +
-        `<button class="btn btn-outline-danger btn-sm" onclick="deleteFile('${nameQ}')">Delete</button>` +
-      `</td>`;
+    if (isDir) {
+      tr.innerHTML =
+        `<td class="small text-muted">${dirLabel}</td>` +
+        `<td class="font-monospace small"><strong>${nameQ}/</strong></td>` +
+        `<td class="small text-muted"></td>` +
+        `<td class="small text-muted">${escHtml(date)}</td>` +
+        `<td></td>`;
+    } else {
+      tr.innerHTML =
+        `<td class="small text-muted">${dirLabel}</td>` +
+        `<td class="font-monospace small">${nameQ}</td>` +
+        `<td class="small text-muted">${escHtml(size)}</td>` +
+        `<td class="small text-muted">${escHtml(date)}</td>` +
+        `<td class="d-flex gap-1">` +
+          `<button class="btn btn-outline-secondary btn-sm" onclick="downloadSdFile('${fullQ}', event)">Download</button>` +
+          `<button class="btn btn-outline-secondary btn-sm" onclick="renameFile('${fullQ}')">Rename</button>` +
+          `<button class="btn btn-outline-danger btn-sm" onclick="deleteFile('${fullQ}')">Delete</button>` +
+        `</td>`;
+    }
     tb.appendChild(tr);
   }
   tbl.appendChild(tb);
@@ -1349,13 +1421,14 @@ async function downloadSdFile(name, ev) {
   const btn = ev && ev.currentTarget ? ev.currentTarget : null;
   const origHtml = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.textContent = '0%'; }
+  const baseName = name.includes('/') ? name.substring(name.lastIndexOf('/') + 1) : name;
   if (net.mode === 'ip') {
     try {
       const data = await httpDownloadFile(name, (pct) => { if (btn) btn.textContent = pct + '%'; });
       const blob = new Blob([data]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = name;
+      a.href = url; a.download = baseName;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { showToast('Download failed: ' + e.message, 'danger'); usbLog('Download failed: ' + e.message, 'err'); }
@@ -1375,7 +1448,7 @@ async function downloadSdFile(name, ev) {
     const blob = new Blob([data]);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = name;
+    a.href = url; a.download = baseName;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) {
@@ -1445,28 +1518,41 @@ function formatDate(unix) {
 
 const SF_MIN_ID = 0;
 const SF_MAX_ID = 9999;
-const SF_ATTR_OPTIONS = [
-  [['l','Loop'],        ['x','No loop']],
-  [['b','Break'],       ['x','No break']],
-  [['i','Init/bg'],     ['x','No init']],
-  [['k','Kill'],        ['c','Soft-kill'], ['x','No kill']],
+// Attribute set (firmware 0.9.6 — position-independent, max 4 chars padded with 'x').
+// Canonical display order: l, b, i, v, then exactly one of k|c|q.
+const SF_ATTR_DEFS = [
+  { ch: 'l', label: 'Loop',      desc: 'file repeats indefinitely' },
+  { ch: 'b', label: 'Break',     desc: 'a running instance of the same sound is stopped before restarting' },
+  { ch: 'i', label: 'Init/bg',   desc: 'played automatically on startup; if Loop is also set, acts as a background music loop' },
+  { ch: 'v', label: 'Voice',     desc: 'voice file — uses volv (voice volume) instead of vols' },
+  { ch: 'k', label: 'Kill',      desc: 'all running tracks are stopped before this sound starts',          group: 'kill' },
+  { ch: 'c', label: 'Soft-kill', desc: 'all tracks except init/background are stopped',                    group: 'kill' },
+  { ch: 'q', label: 'Quit',      desc: 'soft-kill that preserves looping sounds and voices',               group: 'kill' },
 ];
-const SF_ATTR_DESC = [
-  { l: 'l — Loop: file repeats indefinitely',
-    x: 'x — No loop' },
-  { b: 'b — Break: a running instance of the same sound is stopped before restarting',
-    x: 'x — No break' },
-  { i: 'i — Init/background: played automatically on startup; if Loop is also set, acts as a background music loop',
-    x: 'x — No init sound' },
-  { k: 'k — Kill: all running tracks are stopped before this sound starts',
-    c: 'c — Soft-kill: all tracks except init/background are stopped',
-    x: 'x — No kill' },
-];
-const SF_RE = /^(\d{4})-([lx])([bx])([ix])([kcx])-(\d{1,3})-(.*)\.wav$/i;
+const SF_ATTR_ORDER = 'lbivkcq';
+const SF_KILL_GROUP = new Set(['k','c','q']);
+const SF_RE = /^(\d{4})-([lbikcvqx]{4})-(\d{1,3})-(.*)\.wav$/i;
+
+// Normalize an attribute string: drop 'x' / dupes, sort by SF_ATTR_ORDER.
+function sfNormAttrs(s) {
+  const seen = new Set();
+  for (const c of (s || '').toLowerCase()) {
+    if (c === 'x') continue;
+    if (SF_ATTR_ORDER.indexOf(c) < 0) continue;
+    seen.add(c);
+  }
+  return SF_ATTR_ORDER.split('').filter(c => seen.has(c)).join('');
+}
+
+// Pack the canonical attrs string ('', 'lb', 'lvq', …) into a 4-char field padded with 'x'.
+function sfPackAttrs(attrs) {
+  const a = sfNormAttrs(attrs);
+  return (a + 'xxxx').slice(0, 4);
+}
 
 let sfAudio = null;
 let sfLoaded = false;
-let sfEntries = []; // { originalName|null, id, a1, a2, a3, a4, vol, desc }
+let sfEntries = []; // { originalName|null, id, attrs, vol, desc }
 let sfKeySeq = 0;
 
 function sfPad4(n) { return String(n).padStart(4, '0'); }
@@ -1476,34 +1562,37 @@ function parseSoundfileName(name) {
   const m = SF_RE.exec(name);
   if (!m) return null;
   return {
-    id:   parseInt(m[1], 10),
-    a1:   m[2].toLowerCase(),
-    a2:   m[3].toLowerCase(),
-    a3:   m[4].toLowerCase(),
-    a4:   m[5].toLowerCase(),
-    vol:  Math.max(0, Math.min(100, parseInt(m[6], 10) || 0)),
-    desc: m[7],
+    id:    parseInt(m[1], 10),
+    attrs: sfNormAttrs(m[2]),
+    vol:   Math.max(0, Math.min(100, parseInt(m[3], 10) || 0)),
+    desc:  m[4],
   };
 }
 
-function buildSoundfileName(id, a1, a2, a3, a4, vol, desc) {
+function buildSoundfileName(id, attrs, vol, desc) {
   const v = Math.max(0, Math.min(100, parseInt(vol, 10) || 0));
-  return sfPad4(id) + '-' + a1 + a2 + a3 + a4 + '-' + sfPad3(v) + '-' + desc + '.wav';
+  return sfPad4(id) + '-' + sfPackAttrs(attrs) + '-' + sfPad3(v) + '-' + desc + '.wav';
 }
 
-function sfAttrSelect(idx, attrPos, current, disabled) {
-  const opts = SF_ATTR_OPTIONS[attrPos].map(([ch, label]) =>
-    `<option value="${ch}" title="${escHtml(SF_ATTR_DESC[attrPos][ch] || '')}"${ch === current ? ' selected' : ''}>${ch} — ${label}</option>`
-  ).join('');
-  const tip = SF_ATTR_DESC[attrPos][current] || '';
-  return `<select class="form-select form-select-sm sf-attr" data-idx="${idx}" data-pos="${attrPos}" title="${escHtml(tip)}" onchange="this.title = (SF_ATTR_DESC[this.dataset.pos] || {})[this.value] || ''"${disabled ? ' disabled' : ''}>${opts}</select>`;
+function sfAttrCheckboxes(key, attrs) {
+  const set = new Set(attrs.split(''));
+  return SF_ATTR_DEFS.map(d => {
+    const id = 'sf-attr-' + key + '-' + d.ch;
+    const tip = d.ch + ' — ' + d.desc;
+    const grp = d.group ? ' data-group="' + d.group + '"' : '';
+    return `<label class="form-check form-check-inline mb-0 me-2" title="${escHtml(tip)}">` +
+             `<input class="form-check-input sf-attr" type="checkbox" id="${id}" data-key="${key}" data-ch="${d.ch}"${grp}` +
+                (set.has(d.ch) ? ' checked' : '') + '>' +
+             `<span class="form-check-label small font-monospace">${d.ch}</span>` +
+           `</label>`;
+  }).join('');
 }
 
 function renderSoundfileRows() {
   const tb = document.getElementById('sf-tbody');
   tb.innerHTML = '';
   if (!sfEntries.length) {
-    tb.innerHTML = '<tr><td colspan="9" class="small text-muted">No soundfiles. Click "Add Soundfile" to create one, or Refresh.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="6" class="small text-muted">No soundfiles. Click "Add Soundfile" to create one, or Refresh.</td></tr>';
     return;
   }
   const connected = checkConnectedSilent();
@@ -1518,10 +1607,7 @@ function renderSoundfileRows() {
         `<button class="btn btn-outline-primary btn-sm sf-assign-sd" title="Assign from SD (rename existing file)"${connected ? '' : ' disabled'}>SD</button>` +
       `</td>` +
       `<td><input type="number" class="form-control form-control-sm sf-id font-monospace" min="0" max="9999" value="${entry.id}" title="Sound ID (0–9999)"></td>` +
-      `<td>${sfAttrSelect(entry._key, 0, entry.a1, false)}</td>` +
-      `<td>${sfAttrSelect(entry._key, 1, entry.a2, false)}</td>` +
-      `<td>${sfAttrSelect(entry._key, 2, entry.a3, false)}</td>` +
-      `<td>${sfAttrSelect(entry._key, 3, entry.a4, false)}</td>` +
+      `<td class="sf-attrs-cell">${sfAttrCheckboxes(entry._key, entry.attrs)}</td>` +
       `<td><input type="number" class="form-control form-control-sm sf-vol" min="0" max="100" value="${entry.vol}" title="Volume 0–100"></td>` +
       `<td><input type="text" class="form-control form-control-sm sf-desc font-monospace small" value="${escHtml(entry.desc)}"${isNew ? ' placeholder="unsaved — assign via PC/SD"' : ''}></td>` +
       (isNew
@@ -1547,10 +1633,26 @@ function renderSoundfileRows() {
       entry.vol = v;
     });
     descInp.addEventListener('input', () => { entry.desc = descInp.value; });
-    tr.querySelectorAll('select.sf-attr').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const pos = parseInt(sel.dataset.pos, 10);
-        entry['a' + (pos + 1)] = sel.value;
+    const attrBoxes = Array.from(tr.querySelectorAll('input.sf-attr'));
+    const recomputeAttrs = () => {
+      const chars = attrBoxes.filter(b => b.checked).map(b => b.dataset.ch).join('');
+      entry.attrs = sfNormAttrs(chars);
+    };
+    attrBoxes.forEach(box => {
+      box.addEventListener('change', () => {
+        if (box.checked && box.dataset.group === 'kill') {
+          // k / c / q are mutually exclusive
+          attrBoxes.forEach(b => {
+            if (b !== box && b.dataset.group === 'kill') b.checked = false;
+          });
+        }
+        // enforce max 4 total non-x attributes
+        const checked = attrBoxes.filter(b => b.checked);
+        if (checked.length > 4) {
+          box.checked = false;
+          showToast('At most 4 attributes can be set.', 'warning');
+        }
+        recomputeAttrs();
       });
     });
     tr.querySelector('button.sf-assign-pc').addEventListener('click', () => assignSoundfilePC(entry));
@@ -1566,13 +1668,18 @@ function renderSoundfileRows() {
 function sfRebuildEntriesFromFiles(files) {
   sfEntries = [];
   for (const f of files || []) {
-    const name = typeof f === 'string' ? f : f.name;
+    const obj  = typeof f === 'string' ? { name: f } : f;
+    const name = obj.name;
+    const dir  = obj.dir || '';
+    // only files inside the active theme dir (or root if firmware reports no theme)
+    if (activeTheme && dir !== activeTheme) continue;
+    if (!activeTheme && dir) continue;
     const p = parseSoundfileName(name);
     if (p && p.id >= SF_MIN_ID && p.id <= SF_MAX_ID) {
       sfEntries.push({
         _key: ++sfKeySeq,
         originalName: name,
-        id: p.id, a1: p.a1, a2: p.a2, a3: p.a3, a4: p.a4,
+        id: p.id, attrs: p.attrs,
         vol: p.vol, desc: p.desc,
       });
     }
@@ -1604,6 +1711,7 @@ async function loadSoundfiles() {
     let files;
     try {
       const data = JSON.parse(jsonText);
+      if (!Array.isArray(data) && typeof data.theme === 'string') activeTheme = data.theme;
       files = Array.isArray(data) ? data : (data.files || []);
     } catch (_) {
       files = jsonText.trim().split('\n').filter(Boolean).map(l => {
@@ -1631,7 +1739,7 @@ function addSoundfile() {
     _key: ++sfKeySeq,
     originalName: null,
     id: nextId,
-    a1: 'x', a2: 'x', a3: 'x', a4: 'x',
+    attrs: '',
     vol: 100, desc: '',
   });
   sfEntries.sort((a, b) => a.id - b.id);
@@ -1659,9 +1767,10 @@ async function playSoundfile(entry) {
   const origHtml = btn ? btn.innerHTML : '';
   const setPct = pct => { if (btn) btn.textContent = pct + '%'; };
   if (btn) { btn.disabled = true; setPct(0); }
+  const remoteName = themePath(name);
   if (net.mode === 'ip') {
     try {
-      const data = await httpDownloadFile(name, (pct) => setPct(pct));
+      const data = await httpDownloadFile(remoteName, (pct) => setPct(pct));
       setPct(100);
       if (sfAudio) { try { sfAudio.pause(); } catch(_){} try { URL.revokeObjectURL(sfAudio.src); } catch(_){} }
       const url = URL.createObjectURL(new Blob([data], { type: 'audio/wav' }));
@@ -1678,8 +1787,8 @@ async function playSoundfile(entry) {
       const pct = total > 0 ? Math.min(100, Math.floor((recv / total) * 100)) : 0;
       setPct(pct);
     });
-    await usbWriteText('FILE:DOWNLOAD=' + name + '\r\n');
-    usbLog('>> FILE:DOWNLOAD=' + name, 'tx');
+    await usbWriteText('FILE:DOWNLOAD=' + remoteName + '\r\n');
+    usbLog('>> FILE:DOWNLOAD=' + remoteName, 'tx');
     const data = await fp;
     usbLog('Received ' + data.length + ' bytes', 'rx');
     if (sfAudio) { try { sfAudio.pause(); } catch(_) {} try { URL.revokeObjectURL(sfAudio.src); } catch(_) {} }
@@ -1715,6 +1824,7 @@ async function sfFetchFileList() {
   const jsonText = await fp;
   try {
     const data = JSON.parse(jsonText);
+    if (!Array.isArray(data) && typeof data.theme === 'string') activeTheme = data.theme;
     return Array.isArray(data) ? data : (data.files || []);
   } catch (_) {
     return jsonText.trim().split('\n').filter(Boolean).map(l => {
@@ -1762,7 +1872,7 @@ async function assignSoundfileSD(entry) {
   if (!source) return;
 
   const desc = sfSanitizeDesc(source);
-  const target = buildSoundfileName(id, 'x', 'x', 'x', 'x', 100, desc);
+  const target = buildSoundfileName(id, '', 100, desc);
   const original = tr ? (tr.dataset.originalName || '') : '';
 
   if (source === target && original === target) {
@@ -1789,8 +1899,8 @@ async function assignSoundfileSD(entry) {
       usbLog('Deleting old file: ' + original, 'sys');
       try {
         const delResp = (net.mode === 'ip')
-          ? await httpDeleteFile(original)
-          : await usbSendCmd('FILE:DELETE=' + original, 5000);
+          ? await httpDeleteFile(themePath(original))
+          : await usbSendCmd('FILE:DELETE=' + themePath(original), 5000);
         if (!delResp.startsWith('OK:')) {
           usbLog('Delete failed: ' + delResp, 'err');
           showToast('Could not delete old file: ' + delResp, 'warning');
@@ -1803,8 +1913,8 @@ async function assignSoundfileSD(entry) {
       usbLog('Deleting existing target: ' + target, 'sys');
       try {
         const delResp = (net.mode === 'ip')
-          ? await httpDeleteFile(target)
-          : await usbSendCmd('FILE:DELETE=' + target, 5000);
+          ? await httpDeleteFile(themePath(target))
+          : await usbSendCmd('FILE:DELETE=' + themePath(target), 5000);
         if (!delResp.startsWith('OK:')) {
           usbLog('Delete failed: ' + delResp, 'err');
           showToast('Could not overwrite target: ' + delResp, 'danger');
@@ -1825,8 +1935,8 @@ async function assignSoundfileSD(entry) {
 
     usbLog('Renaming "' + source + '" → "' + target + '"', 'sys');
     const resp = (net.mode === 'ip')
-      ? await httpRenameFile(source, target)
-      : await usbSendCmd('FILE:RENAME=' + source + ',' + target, 5000);
+      ? await httpRenameFile(themePath(source), themePath(target))
+      : await usbSendCmd('FILE:RENAME=' + themePath(source) + ',' + themePath(target), 5000);
     usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
     if (resp.startsWith('OK:')) {
       showToast('Assigned "' + target + '"', 'success');
@@ -1858,7 +1968,7 @@ async function assignSoundfilePC(entry) {
     const origHtml = btn ? btn.innerHTML : '';
 
     const desc = sfSanitizeDesc(file.name);
-    const target = buildSoundfileName(id, 'x', 'x', 'x', 'x', 100, desc);
+    const target = buildSoundfileName(id, '', 100, desc);
     const original = tr ? (tr.dataset.originalName || '') : '';
 
     if (original && original !== target) {
@@ -1878,8 +1988,8 @@ async function assignSoundfilePC(entry) {
         usbLog('Deleting old file: ' + original, 'sys');
         try {
           const delResp = (net.mode === 'ip')
-            ? await httpDeleteFile(original)
-            : await usbSendCmd('FILE:DELETE=' + original, 5000);
+            ? await httpDeleteFile(themePath(original))
+            : await usbSendCmd('FILE:DELETE=' + themePath(original), 5000);
           if (!delResp.startsWith('OK:')) {
             usbLog('Delete failed: ' + delResp, 'err');
             showToast('Could not delete old file: ' + delResp, 'warning');
@@ -1892,8 +2002,8 @@ async function assignSoundfilePC(entry) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       usbLog('Assigning "' + file.name + '" (' + bytes.length + ' bytes) as ' + target, 'sys');
       const resp = (net.mode === 'ip')
-        ? await httpUploadFile(target, bytes, (pct) => { if (btn) btn.textContent = pct + '%'; })
-        : await usbUploadFile(target, bytes, (pct) => { if (btn) btn.textContent = pct + '%'; });
+        ? await httpUploadFile(themePath(target), bytes, (pct) => { if (btn) btn.textContent = pct + '%'; })
+        : await usbUploadFile(themePath(target), bytes, (pct) => { if (btn) btn.textContent = pct + '%'; });
       usbLog(resp, resp.startsWith('ERR:') ? 'err' : 'rx');
       if (resp.startsWith('OK:')) {
         showToast('Assigned "' + target + '"', 'success');
@@ -1928,7 +2038,7 @@ async function writeSoundconfig() {
     seenIds.add(entry.id);
     const desc = entry.desc.trim();
     if (!desc) continue;
-    const target = buildSoundfileName(entry.id, entry.a1, entry.a2, entry.a3, entry.a4, entry.vol, desc);
+    const target = buildSoundfileName(entry.id, entry.attrs, entry.vol, desc);
     if (seenNames.has(target)) {
       showToast('Duplicate filename: ' + target, 'danger');
       return;
@@ -1948,8 +2058,8 @@ async function writeSoundconfig() {
   for (const r of renames) {
     try {
       const resp = (net.mode === 'ip')
-        ? await httpRenameFile(r.original, r.target)
-        : await usbSendCmd('FILE:RENAME=' + r.original + ',' + r.target, 5000);
+        ? await httpRenameFile(themePath(r.original), themePath(r.target))
+        : await usbSendCmd('FILE:RENAME=' + themePath(r.original) + ',' + themePath(r.target), 5000);
       if (resp.startsWith('OK:')) {
         r.entry.originalName = r.target;
         ok++;
@@ -2039,7 +2149,11 @@ async function loadSoundgroups() {
     showToast('Failed to load files: ' + e.message, 'danger');
     return;
   }
-  const norm = (files || []).map(f => typeof f === 'string' ? { name: f } : f).filter(f => f && f.name);
+  const norm = (files || [])
+    .map(f => typeof f === 'string' ? { name: f } : f)
+    .filter(f => f && f.name)
+    // restrict to active sound theme (or root if firmware doesn't report a theme)
+    .filter(f => activeTheme ? (f.dir || '') === activeTheme : !(f.dir));
 
   sgWavList = [];
   for (const f of norm) {
@@ -2209,8 +2323,8 @@ async function deleteSoundgroup(entry) {
   if (!await askConfirm('Delete group "' + entry.originalName + '"?', { okText: 'Delete', okClass: 'btn-danger' })) return;
   try {
     const resp = (net.mode === 'ip')
-      ? await httpDeleteFile(entry.originalName)
-      : await usbSendCmd('FILE:DELETE=' + entry.originalName, 5000);
+      ? await httpDeleteFile(themePath(entry.originalName))
+      : await usbSendCmd('FILE:DELETE=' + themePath(entry.originalName), 5000);
     if (resp.startsWith('OK:')) {
       showToast('Deleted "' + entry.originalName + '"', 'success');
       sgEntries = sgEntries.filter(e => e !== entry);
@@ -2260,14 +2374,14 @@ async function writeSoundgroups() {
       if (a.type === 'rename') {
         usbLog('Renaming "' + a.source + '" → "' + a.target + '"', 'sys');
         resp = (net.mode === 'ip')
-          ? await httpRenameFile(a.source, a.target)
-          : await usbSendCmd('FILE:RENAME=' + a.source + ',' + a.target, 5000);
+          ? await httpRenameFile(themePath(a.source), themePath(a.target))
+          : await usbSendCmd('FILE:RENAME=' + themePath(a.source) + ',' + themePath(a.target), 5000);
       } else {
         usbLog('Creating group file "' + a.target + '"', 'sys');
         const bytes = new Uint8Array([0x0A]); // placeholder byte — content is ignored
         resp = (net.mode === 'ip')
-          ? await httpUploadFile(a.target, bytes)
-          : await usbUploadFile(a.target, bytes);
+          ? await httpUploadFile(themePath(a.target), bytes)
+          : await usbUploadFile(themePath(a.target), bytes);
       }
       if (resp.startsWith('OK:')) {
         ok++;
@@ -2397,7 +2511,11 @@ async function loadAttractMode() {
     showToast('Failed to load files: ' + e.message, 'danger');
     return;
   }
-  const norm = (files || []).map(f => typeof f === 'string' ? { name: f } : f).filter(f => f && f.name);
+  const norm = (files || [])
+    .map(f => typeof f === 'string' ? { name: f } : f)
+    .filter(f => f && f.name)
+    // restrict to active sound theme
+    .filter(f => activeTheme ? (f.dir || '') === activeTheme : !(f.dir));
 
   // collect groups for the dropdown
   amGroupList = [];
@@ -2457,15 +2575,18 @@ async function writeAttractMode() {
   try {
     // re-list to be safe (user may have changed things)
     const files = await sfFetchFileList();
-    const norm = (files || []).map(x => typeof x === 'string' ? { name: x } : x).filter(x => x && x.name);
+    const norm = (files || [])
+      .map(x => typeof x === 'string' ? { name: x } : x)
+      .filter(x => x && x.name)
+      .filter(x => activeTheme ? (x.dir || '') === activeTheme : !(x.dir));
     const existingAtr = norm.filter(x => /\.atr$/i.test(x.name)).map(x => x.name);
 
     for (const name of existingAtr) {
       if (name === target) continue;
       usbLog('Deleting attract file "' + name + '"', 'sys');
       const resp = (net.mode === 'ip')
-        ? await httpDeleteFile(name)
-        : await usbSendCmd('FILE:DELETE=' + name, 5000);
+        ? await httpDeleteFile(themePath(name))
+        : await usbSendCmd('FILE:DELETE=' + themePath(name), 5000);
       if (!resp.startsWith('OK:')) {
         showToast('Delete failed for ' + name + ': ' + resp, 'danger');
         status.textContent = 'Delete failed.';
@@ -2478,8 +2599,8 @@ async function writeAttractMode() {
       usbLog('Creating attract file "' + target + '"', 'sys');
       const bytes = new Uint8Array([0x0A]); // placeholder byte — content is ignored
       const resp = (net.mode === 'ip')
-        ? await httpUploadFile(target, bytes)
-        : await usbUploadFile(target, bytes);
+        ? await httpUploadFile(themePath(target), bytes)
+        : await usbUploadFile(themePath(target), bytes);
       if (!resp.startsWith('OK:')) {
         showToast('Upload failed: ' + resp, 'danger');
         status.textContent = 'Upload failed.';
@@ -2754,6 +2875,11 @@ function parseConfig(text) {
   if (v.ser  !== undefined) { setSelectVal('cfg-ser', v.ser); onSerChange(); }
   if (v.addr !== undefined) document.getElementById('cfg-addr').value = v.addr;
   if (v.usbbaud !== undefined) setSelectVal('cfg-usbbaud', v.usbbaud);
+  const sth = document.getElementById('cfg-stheme');
+  if (sth && v.stheme !== undefined) sth.value = v.stheme.replace(/^"(.*)"$/, '$1');
+  if (v.volv !== undefined) document.getElementById('cfg-volv').value = v.volv;
+  if (v.vols !== undefined) document.getElementById('cfg-vols').value = v.vols;
+  if (v.log  !== undefined) setSelectVal('cfg-log', v.log);
   const wEn = document.getElementById('cfg-wifi-enable');
   if (wEn && v.wifi_enable !== undefined) {
     const s = String(v.wifi_enable).toLowerCase().trim();
@@ -2774,8 +2900,14 @@ function generateConfig() {
   const ser  = document.getElementById('cfg-ser').value;
   const addr = document.getElementById('cfg-addr').value;
   const usbbaud = document.getElementById('cfg-usbbaud').value;
+  const stheme = (document.getElementById('cfg-stheme').value || 'orgsnd').trim();
+  const volv = document.getElementById('cfg-volv').value || '100';
+  const vols = document.getElementById('cfg-vols').value || '100';
+  const log  = document.getElementById('cfg-log').value || 'no';
   let s = `dac=${dac}\nmix=${mix}\nevt=${evt}\ndeb=${deb}\nrpd=${rpd}\nser=${ser}\n`;
   if (ser === 'i2c') s += `addr=${addr}\n`;
+  s += `stheme=${stheme}\n`;
+  s += `volv=${volv}\nvols=${vols}\nlog=${log}\n`;
   s += `usbbaud=${usbbaud}\n`;
   const wEn  = document.getElementById('cfg-wifi-enable');
   const wSsid= document.getElementById('cfg-wifi-ssid');
@@ -2802,7 +2934,8 @@ function onSerChange() {
 // ─── Navbar file operations ───────────────────────────────────────────────────
 
 function defaultConfig() {
-  return { dac:'12', mix:'div2', evt:'bg80', deb:'10', rpd:'60', ser:'none', addr:'0x66', usbbaud:'115200' };
+  return { dac:'12', mix:'div2', evt:'bg80', deb:'10', rpd:'60', ser:'none', addr:'0x66',
+           usbbaud:'115200', stheme:'orgsnd', volv:'100', vols:'100', log:'no' };
 }
 
 function applyDefaults() {
@@ -2814,6 +2947,10 @@ function applyDefaults() {
   setSelectVal('cfg-ser', d.ser); onSerChange();
   document.getElementById('cfg-addr').value = d.addr;
   setSelectVal('cfg-usbbaud', d.usbbaud);
+  document.getElementById('cfg-stheme').value = d.stheme;
+  document.getElementById('cfg-volv').value   = d.volv;
+  document.getElementById('cfg-vols').value   = d.vols;
+  setSelectVal('cfg-log', d.log);
   const wEn = document.getElementById('cfg-wifi-enable');  if (wEn) wEn.checked = false;
   const wSsid = document.getElementById('cfg-wifi-ssid');  if (wSsid) wSsid.value = '';
   const wPwd = document.getElementById('cfg-wifi-pwd');    if (wPwd) wPwd.value = '';
@@ -2882,26 +3019,37 @@ async function initSdCard() {
     sdLog('Found ' + remoteFiles.length + ' file(s).');
 
     sdLog('Reading SD card file list\u2026');
+    // Existing entries keyed by remote path ("name" or "<theme>/name"), so the
+    // skip/overwrite test below matches by destination, not just bare name.
     const existingNames = new Set();
     try {
       if (net.mode === 'ip') {
         const files = await httpListFiles();
-        for (const f of files) existingNames.add(typeof f === 'string' ? f : f.name);
+        for (const f of files) {
+          const o = typeof f === 'string' ? { name: f } : f;
+          existingNames.add(pathFor(o.name, o.dir || ''));
+        }
       } else {
         const framePromise = usbReceiveTextFrame(15000);
         await usbWriteText('FILE:LIST\r\n');
         const jsonText = await framePromise;
         const data = JSON.parse(jsonText);
-        for (const f of (data.files || [])) existingNames.add(f.name);
+        if (typeof data.theme === 'string') activeTheme = data.theme;
+        for (const f of (data.files || [])) existingNames.add(pathFor(f.name, f.dir || ''));
       }
-      sdLog('SD card has ' + existingNames.size + ' existing file(s).');
+      sdLog('SD card has ' + existingNames.size + ' existing file(s). Theme: ' + (activeTheme || '(none)'));
     } catch (e) {
       sdLog('Warning: could not read SD file list (' + e.message + ') \u2014 will upload all.', '#ffaa00');
     }
 
+    // Sound/group/attract files go into the active theme dir; everything else
+    // (config.txt, update.bin, etc.) stays at root.
+    const isThemeFile = n => /\.(wav|grp|atr)$/i.test(n);
+
     for (const name of remoteFiles) {
-      if (existingNames.has(name) && !overwrite) {
-        sdLog('  skip  ' + name + ' (already exists)', '#888');
+      const dest = isThemeFile(name) ? pathFor(name, activeTheme) : name;
+      if (existingNames.has(dest) && !overwrite) {
+        sdLog('  skip  ' + dest + ' (already exists)', '#888');
         continue;
       }
 
@@ -2916,15 +3064,15 @@ async function initSdCard() {
         continue;
       }
 
-      sdLog('  upload ' + name + ' (' + buf.byteLength + ' bytes)\u2026');
+      sdLog('  upload ' + dest + ' (' + buf.byteLength + ' bytes)\u2026');
       try {
         const resp = (net.mode === 'ip')
-          ? await httpUploadFile(name, new Uint8Array(buf))
-          : await usbUploadFile(name, new Uint8Array(buf));
+          ? await httpUploadFile(dest, new Uint8Array(buf))
+          : await usbUploadFile(dest, new Uint8Array(buf));
         if (!resp || !resp.startsWith('OK:')) throw new Error(resp || 'no response');
-        sdLog('    OK  ' + name, '#00cc66');
+        sdLog('    OK  ' + dest, '#00cc66');
       } catch (e) {
-        sdLog('  ERROR uploading ' + name + ': ' + e.message, '#ff4444');
+        sdLog('  ERROR uploading ' + dest + ': ' + e.message, '#ff4444');
       }
     }
 
@@ -3293,12 +3441,31 @@ async function httpReboot() {
   if (!r.ok) throw new Error('HTTP ' + r.status);
 }
 
+// Single-flight: coalesce concurrent /files callers (Soundfiles + Soundgroups +
+// Attract often refresh together) onto one round-trip.  Logs elapsed ms so
+// future failures can be diagnosed (client timeout vs server error vs link).
+let _httpFilesInFlight = null;
 async function httpListFiles() {
-  usbLog('GET /files', 'tx');
-  const r = await netFetch('/files', {}, 15000);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const data = await r.json();
-  return Array.isArray(data) ? data : (data.files || []);
+  if (_httpFilesInFlight) return _httpFilesInFlight;
+  const t0 = performance.now();
+  _httpFilesInFlight = (async () => {
+    usbLog('GET /files', 'tx');
+    try {
+      const r = await netFetch('/files', {}, 15000);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      if (!Array.isArray(data) && typeof data.theme === 'string') activeTheme = data.theme;
+      const files = Array.isArray(data) ? data : (data.files || []);
+      const dt = Math.round(performance.now() - t0);
+      usbLog('GET /files OK — ' + files.length + ' file(s) in ' + dt + ' ms', 'rx');
+      return files;
+    } catch (e) {
+      const dt = Math.round(performance.now() - t0);
+      usbLog('GET /files FAILED after ' + dt + ' ms: ' + e.message, 'err');
+      throw e;
+    }
+  })().finally(() => { _httpFilesInFlight = null; });
+  return _httpFilesInFlight;
 }
 
 async function httpDownloadFile(name, onProgress) {

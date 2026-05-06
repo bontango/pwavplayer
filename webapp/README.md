@@ -86,6 +86,10 @@ match the firmware's `InitConfig()`.
 | `ser` | `none`, `uart`, `i2c` | `none` | Sound-command serial interface |
 | `addr` | hex | `0x66` | I2C slave address, only when `ser=i2c` |
 | `usbbaud` | `115200`…`921600` | `115200` | UART0 baud used by **this** editor |
+| `stheme` | string | `orgsnd` | Active sound-theme directory under SD root |
+| `log` | `no`, `yes`, `only` | `no` | Persistent event log on SD (`log.txt`); `only` writes the log but suppresses audio |
+| `volv` | 0–100 | `100` | Voice-class volume scaling % (files with attribute `v`) |
+| `vols` | 0–100 | `100` | Sound-class volume scaling % (non-voice files) |
 | `wifi_enable` | `yes`, `no` | `no` | Enable WiFi STA + HTTP server on port 8080 |
 | `wifi_ssid` | string | *(empty)* | WiFi SSID |
 | `wifi_pwd` | string | *(empty)* | WiFi password |
@@ -103,9 +107,12 @@ match the firmware's `InitConfig()`.
 
 ### 3. Soundfiles
 
-Manage the sound-file slots (IDs 0001–0031). The editor parses the
-`NNNN-AAAA-VVV-description.wav` naming scheme and displays attributes (loop, break,
-init/background, kill) in a table.
+Manage the sound-file slots (IDs 0001–0031) in the active sound theme
+(`stheme`). The editor parses the `NNNN-AAAA-VVV-description.wav` naming
+scheme and displays attributes as a row of seven checkboxes (Loop, Break,
+Init/bg, Voice, Kill, Soft-kill, Quit) in the Attributes column. Attributes
+are position-independent, with `Kill`/`Soft-kill`/`Quit` mutually exclusive
+and a maximum of four attributes per file.
 
 - **Refresh** — re-reads the SD file list.
 - **Write Soundconfig** — renames files on the device so the filenames match the
@@ -142,8 +149,9 @@ Both derive the target filename from the slot ID and the source file's base name
 4. If the slot already holds a different file, it is deleted first. If a file with
    the target name already exists, you are asked whether to overwrite it.
 
-Finally, adjust attributes (loop / break / init / background / kill / volume) in
-the table and click **Write Soundconfig** to rename the files accordingly.
+Finally, adjust attributes (loop / break / init / voice / kill / soft-kill /
+quit / volume) in the table and click **Write Soundconfig** to rename the
+files accordingly.
 
 > Tip: the description part of the filename is sanitized — only letters, digits and
 > dashes are kept. Special characters and spaces are replaced with `-`.
@@ -180,13 +188,19 @@ filename — changing members, mode, ID, or description translates to a rename o
 
 ### 5. SD Card
 
-Generic file manager for the SD card root.
+Generic file manager for the SD card root **and** the active sound-theme
+directory.
 
-- **File list** — name, size, modification time. The modification time is only meaningful
-  if the device clock was set (the editor sends `SET:TIME=` automatically right after the
-  handshake).
-- **Upload / Download / Rename / Delete** — standard operations, streamed over the serial
-  protocol described in `API.md`.
+- **File list** — Dir, name, size, modification time. Files in the SD root show
+  an empty Dir; files inside the active theme directory show the theme name.
+  Theme entries are sorted under their directory. The modification time is
+  only meaningful if the device clock was set (the editor sends `SET:TIME=`
+  automatically right after the handshake). Sizes/timestamps may be `0` for
+  theme entries because the firmware skips `stat()` on the (potentially large)
+  theme directory.
+- **Upload / Download / Rename / Delete** — standard operations, streamed over
+  the serial protocol described in `API.md`. File ops accept either a plain
+  filename (root) or `<theme>/<file>` (one level into the theme directory).
 - **Init SD Card** — downloads a reference SD layout from `lisy.dev` and uploads it to the
   device. Useful for a fresh card. The *Overwrite existing* checkbox controls whether
   existing files are replaced.

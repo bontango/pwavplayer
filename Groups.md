@@ -9,9 +9,10 @@ variants without duplicating logic in your event decoder.
 
 ## Creating a group
 
-A group is defined purely by the **filename** of an empty `.grp` file placed on
-the SD card next to your `.wav` files. The file content is not read — everything
-the player needs is encoded in the name.
+A group is defined purely by the **filename** of an empty `.grp` file placed in
+the active sound-theme directory (`<sdroot>/<stheme>/`, default
+`<sdroot>/orgsnd/`) next to your `.wav` files. The file content is not read —
+everything the player needs is encoded in the name.
 
 ### Filename pattern
 
@@ -69,13 +70,14 @@ an ID that is already used by a `.wav` file.
 ## Implicit groups (startup & background music)
 
 Two groups are created automatically from the attribute flags of your WAV
-filenames (format: `<id>-<flags>-<vol>-<name>.wav`). Both use random-pick mode:
+filenames (format: `<id>-<flags>-<vol>-<name>.wav`). The 4 flag characters are
+position-independent. Both implicit groups use random-pick mode:
 
-- **Startup sounds** — every WAV whose 3rd flag character is `i` is added to a
-  hidden "startup" group. One random entry is played at boot.
-- **Background music** — every WAV whose 1st flag is `l` **and** 3rd flag is `i`
-  is added to a hidden "background" group. One random entry is started as
-  looping background music.
+- **Startup sounds** — every WAV whose flags contain `i` is added to a hidden
+  "startup" group. One random entry is played at boot.
+- **Background music** — every WAV whose flags contain **both** `l` and `i` is
+  added to a hidden "background" group. One random entry is started as looping
+  background music.
 
 You do not need to create a `.grp` file for these — the flags in the WAV name
 are enough.

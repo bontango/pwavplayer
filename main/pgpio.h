@@ -21,6 +21,11 @@
 #define RX_SDA   GPIO_NUM_21
 #define TX_SCL   GPIO_NUM_22
 
+// On-board indicator LEDs (active LOW — driven against GND).
+// Share pins with RX_SDA/TX_SCL — only used when ser=none.
+#define LED_D1   GPIO_NUM_21    // ON while at least one track is playing
+#define LED_D2   GPIO_NUM_22    // ON while attract mode is active
+
 #define TESTPIN  GPIO_NUM_0
 
 // trace prototype

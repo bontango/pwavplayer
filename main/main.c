@@ -56,11 +56,12 @@ extern void WAVDummy(void *pvParameters);
 extern void SerialUART(void *pvParameters);
 extern void SerialI2C(void *pvParameters);
 extern void UsbSerial(void *pvParameters);
-extern void PinEvents(void *pvParameters);
-extern void PinEvents0(void *pvParameters);
-extern void EncEventW11(void *pvParameters);
-extern void EncEventG80(void *pvParameters);
-extern void EncEventB35(void *pvParameters);
+extern void FlatIf(void *pvParameters);
+extern void FlatIf0(void *pvParameters);
+extern void Sys11If(void *pvParameters);
+extern void G80If(void *pvParameters);
+extern void B35If(void *pvParameters);
+extern void event_log_open(void);
 extern StreamBufferHandle_t xpinevt;
 extern uint16_t gconf[CONF_MAX];
 
@@ -75,6 +76,9 @@ void app_main(void) {
     InitConfig();
     sprintf(fpath0, "%s/%s",mount_point,CONFIG_NAME);
     ReadConfig(fpath0);
+
+    // Open persistent event log on SD (no-op if log=no)
+    event_log_open();
 
     xpinevt = xStreamBufferCreate(IP_BUF_SZ,1);
 
@@ -95,30 +99,26 @@ void app_main(void) {
         xTaskCreatePinnedToCore(&SerialUART, "SerialUART", 4096, NULL, (tskIDLE_PRIORITY + 2), NULL, CORE_1);
         break;
     case CONF_SER_I2C:
-        xTaskCreatePinnedToCore(&SerialI2C, "SerialI2C", 4096, &(gconf[CONF_I2C_ADDR]), (tskIDLE_PRIORITY + 2), NULL, CORE_1);
+        xTaskCreatePinnedToCore(&SerialI2C, "SerialI2C", 4096, NULL, (tskIDLE_PRIORITY + 2), NULL, CORE_1);
         break;
     default: break;
     }
 
     switch(gconf[CONF_EVT]) {
-    case CONF_EVT_FLAT: {
-        uint16_t garg[2];
-        garg[0] = gconf[CONF_DEB];
-        garg[1] = gconf[CONF_RESTPD];
-        xTaskCreatePinnedToCore(&PinEvents, "PinEvents", 4096, garg, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
-        }
+    case CONF_EVT_FLAT:
+        xTaskCreatePinnedToCore(&FlatIf,  "FlatIf",  4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
         break;
     case CONF_EVT_FLAT0:
-        xTaskCreatePinnedToCore(&PinEvents0, "PinEvents0", 4096, &(gconf[CONF_DEB]), (tskIDLE_PRIORITY + 3), NULL, CORE_1);
+        xTaskCreatePinnedToCore(&FlatIf0, "FlatIf0", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
         break;
     case CONF_EVT_BW11:
-        xTaskCreatePinnedToCore(&EncEventW11, "EncEventW11", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
+        xTaskCreatePinnedToCore(&Sys11If, "Sys11If", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
         break;
     case CONF_EVT_BG80:
-        xTaskCreatePinnedToCore(&EncEventG80, "EncEventG80", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
+        xTaskCreatePinnedToCore(&G80If,   "G80If",   4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
         break;
     case CONF_EVT_BY35:
-        xTaskCreatePinnedToCore(&EncEventB35, "EncEventB35", 4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
+        xTaskCreatePinnedToCore(&B35If,   "B35If",   4096, NULL, (tskIDLE_PRIORITY + 3), NULL, CORE_1);
         break;
     default: break;
     }

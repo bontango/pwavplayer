@@ -129,7 +129,8 @@ static bool i2c_slave_receive_cb(i2c_slave_dev_handle_t i2c_slave, const i2c_sla
 void SerialI2C(void *pvParameters) {
 
     I2Ccontext context = {0};
-    uint16_t i2c_saddr = *((uint16_t *)pvParameters);
+    extern uint16_t gconf[CONF_MAX];
+    uint16_t i2c_saddr = gconf[CONF_I2C_ADDR];
     i2c_slave_dev_handle_t shandle;
 
     context.event_queue = xQueueCreate(16, sizeof(i2c_slave_event_t));

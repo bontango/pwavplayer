@@ -96,7 +96,13 @@ static esp_err_t extract_filename(httpd_req_t *req, const char *prefix,
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty filename");
         return ESP_FAIL;
     }
-    if (strchr(out, '/') || strstr(out, "..")) {
+    // Allow at most one '/' (theme/file).  cmdapi_resolve_path validates segments.
+    const char *first_slash = strchr(out, '/');
+    if (first_slash && strchr(first_slash + 1, '/')) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid filename");
+        return ESP_FAIL;
+    }
+    if (strstr(out, "..")) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid filename");
         return ESP_FAIL;
     }
@@ -429,6 +435,14 @@ esp_err_t httpserver_start(void) {
     cfg.max_uri_handlers = 16;
     cfg.server_port     = HTTP_SERVER_PORT;
     cfg.ctrl_port       = 32769;
+    // Defaults (5 s) are too tight: under WiFi retransmits or while CORS
+    // preflight + GET race on separate sockets the server can drop a slow
+    // response, which the editor surfaces as "signal is aborted".
+    cfg.recv_wait_timeout = 30;
+    cfg.send_wait_timeout = 30;
+    // Allow purging the oldest socket so a leaked keep-alive doesn't lock out
+    // a fresh request when all 7 default slots are in use.
+    cfg.lru_purge_enable = true;
 
     httpd_handle_t server = NULL;
     esp_err_t ret = httpd_start(&server, &cfg);

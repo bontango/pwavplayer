@@ -27,6 +27,8 @@
 #include "pgpio.h"
 #include "pwav.h"
 
+// Gottlieb Sys 80 audio board is based on ESP32 WROVER
+#ifdef ESP32_WROVER
 
 #define ESP_INTR_FLAG_DEFAULT 0
 
@@ -113,7 +115,7 @@ static bool G80_alarm_cb(gptimer_handle_t timer, const gptimer_alarm_event_data_
 // Task to handle binary encoded events for Gottlieb 1/80/80B
 //
 
-void EncEventG80(void *pvParameters) {
+void G80If(void *pvParameters) {
 
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT,
@@ -168,3 +170,5 @@ void EncEventG80(void *pvParameters) {
 
 }
 
+
+#endif // ESP32_WROVER

@@ -51,12 +51,25 @@ typedef struct {
 #define CONF_SER_UART       3   // ser=uart
 #define CONF_I2C_ADDR   5       // I2C slave address
 #define CONF_RESTPD     6       // rest period in ms
-#define CONF_WIFI_ENABLE 7      // 0=off, 1=on
-#define CONF_MAX        8
+#define CONF_LOG        7
+#define CONF_LOG_NO         1   // log=no (default)
+#define CONF_LOG_YES        2   // log=yes — write events to log.txt
+#define CONF_LOG_ONLY       3   // log=yes, but suppress audio playback
+#define CONF_VOLV       8       // voice-volume scaling %, default 100
+#define CONF_VOLS       9       // sound-volume scaling %, default 100
+#define CONF_WIFI_ENABLE 10     // 0=off, 1=on
+#define CONF_MAX        11
+
+// Sound theme directory (subfolder of SD root containing all sound/group files)
+#define NSTHEME 32
 
 // Activity log (ring buffer in wavplayer.c, queried via HTTP /activity)
 void activity_log_add(const char *msg);
 // Returns newly-allocated malloc'd JSON; caller frees. since_seq < 0 = all.
 // Format: {"next":<N>,"entries":[{"seq":N,"ts":ms,"msg":"..."}, ...]}
 char *activity_log_get_json(long since_seq);
+
+// Persistent event log (log.txt on SD).  No-op if log=no.
+void event_log_open(void);
+void event_log_add(const char *msg);
 

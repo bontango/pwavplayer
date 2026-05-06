@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -50,7 +51,7 @@
 #include "pwav.h"
 
 // Version
-#define VERSION "1.0.6"
+#define VERSION "1.0.7"
 char *gversion = VERSION;
 
 // ---------------------------------------------------------------------------
@@ -167,6 +168,9 @@ static struct stac {
 // Config data
 uint16_t gconf[CONF_MAX];
 uint32_t gusbbaud;
+
+// Sound theme directory (subdir of mount_point holding all sound/group files)
+char gconfsd[NSTHEME + 1] = "orgsnd";
 
 // WiFi credentials (strings — kept out of gconf[] which is uint16_t)
 #define WIFI_STR_MAX 65
@@ -312,6 +316,21 @@ void ReadConfig(char *fname) {
                 strncpy(gwifi_pwd, val, WIFI_STR_MAX - 1);
                 gwifi_pwd[WIFI_STR_MAX - 1] = '\0';
             }
+            if (strcmp(key,"stheme") == 0) {
+                strncpy(gconfsd, val, NSTHEME);
+                gconfsd[NSTHEME] = '\0';
+            }
+            if (strcmp(key,"log") == 0) {
+                if (strcmp(val,"no") == 0)   gconf[CONF_LOG] = CONF_LOG_NO;
+                if (strcmp(val,"yes") == 0)  gconf[CONF_LOG] = CONF_LOG_YES;
+                if (strcmp(val,"only") == 0) gconf[CONF_LOG] = CONF_LOG_ONLY;
+            }
+            if (strcmp(key,"volv") == 0) {
+                gconf[CONF_VOLV] = (uint16_t)atoi(val);
+            }
+            if (strcmp(key,"vols") == 0) {
+                gconf[CONF_VOLS] = (uint16_t)atoi(val);
+            }
         }
     }
     fclose(fp);
@@ -327,9 +346,40 @@ void InitConfig(void) {
     gconf[CONF_SER] = CONF_SER_NONE;
     gconf[CONF_I2C_ADDR] = 0x66;
     gconf[CONF_WIFI_ENABLE] = 0;
+    gconf[CONF_LOG]  = CONF_LOG_NO;
+    gconf[CONF_VOLV] = 100;
+    gconf[CONF_VOLS] = 100;
     gusbbaud = 115200;
     gwifi_ssid[0] = '\0';
     gwifi_pwd[0]  = '\0';
+    strcpy(gconfsd, "orgsnd");
+}
+
+//----------------------------------------------------------------------------------------
+//
+// Persistent event log on SD (log.txt) — written when log=yes or log=only.
+// Independent of the in-RAM activity_log_* ring buffer (used by /activity HTTP).
+//
+static FILE *g_eventlog_fp = NULL;
+
+void event_log_open(void) {
+    if (gconf[CONF_LOG] != CONF_LOG_YES && gconf[CONF_LOG] != CONF_LOG_ONLY) return;
+    char p[40];
+    snprintf(p, sizeof(p), "%s/log.txt", mount_point);
+    g_eventlog_fp = fopen(p, "a");
+    if (!g_eventlog_fp) {
+        ESP_LOGW(LOG, "Cannot open %s for append", p);
+        return;
+    }
+    fprintf(g_eventlog_fp, "---- boot ----\n");
+    fflush(g_eventlog_fp);
+}
+
+void event_log_add(const char *msg) {
+    if (!g_eventlog_fp || !msg) return;
+    uint32_t ts = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    fprintf(g_eventlog_fp, "%u %s\n", (unsigned)ts, msg);
+    fflush(g_eventlog_fp);
 }
 
 
@@ -368,6 +418,36 @@ static int StripWavHeader(int fh, uint32_t *len, uint32_t *stpos) {
 //
 
 static Track *tchain = NULL;
+
+// On-board LED helpers — active LOW (pin LOW = LED ON).
+// Only configured on WROVER and only when ser=none, since LED_D1/D2 share pins
+// with the optional UART/I2C interface.
+static bool g_leds_active = false;
+static inline void LedD1(bool on) { if (g_leds_active) gpio_set_level(LED_D1, on ? 0 : 1); }
+static inline void LedD2(bool on) { if (g_leds_active) gpio_set_level(LED_D2, on ? 0 : 1); }
+
+static void LedsInit(void) {
+#ifdef ESP32_WROVER
+    if (gconf[CONF_SER] != CONF_SER_NONE) return;  // pins owned by UART/I2C
+    gpio_config_t io = {0};
+    io.intr_type = GPIO_INTR_DISABLE;
+    io.mode = GPIO_MODE_OUTPUT;
+    io.pin_bit_mask = (1ULL << LED_D1) | (1ULL << LED_D2);
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io.pull_up_en = GPIO_PULLUP_DISABLE;
+    if (gpio_config(&io) == ESP_OK) {
+        g_leds_active = true;
+        gpio_set_level(LED_D1, 1);  // off
+        gpio_set_level(LED_D2, 1);  // off
+    }
+#endif
+}
+
+// Position-independent attribute test
+static int HasAttribute(Sfile *s, char attr) {
+    for (int i = 0; i < NSATTR; i++) if (s->attr[i] == attr) return 1;
+    return 0;
+}
 
 // Create and insert a new track
 //
@@ -414,19 +494,30 @@ static void DeleteTracks(void) {
     }
 }
 
-// Mark tracks for deletion
+// Mark tracks for deletion.
+// id < 0  : hard kill (all tracks).
+// id >= 0 : kill tracks whose sound id matches.
+// Soft kill (sparing init/background sounds) is now done via MarkTracksByAttr(1,"i").
 //
 static void MarkTracksById(int16_t id) {
-    if (id == -1) { // hard kill, mark all tracks
-        for (Track *p = tchain; p != NULL; p = p->next) p->mode[0] = 1;
+    for (Track *p = tchain; p != NULL; p = p->next) {
+        if (id < 0) p->mode[0] = 1;
+        else if (p->sf->id == (uint16_t)id) p->mode[0] = 1;
     }
-    else if (id == -2) { // soft kill, mark all tracks except init/background 
-        for (Track *p = tchain; p != NULL; p = p->next) {
-            if (p->sf->attr[2] != 'i') p->mode[0] = 1;
-            }
-    }
-    else { // mark tracks with given id
-        for (Track *p = tchain; p != NULL; p = p->next) if (p->sf->id == (uint16_t)id) p->mode[0] = 1;
+}
+
+// Mark tracks for deletion based on attribute presence.
+//   inv == 0 : mark tracks that HAVE any of the chars in `attr`
+//   inv != 0 : mark tracks that have NONE of the chars in `attr`
+static void MarkTracksByAttr(uint8_t inv, const char *attr) {
+    for (Track *p = tchain; p != NULL; p = p->next) {
+        uint16_t vv = 0;
+        for (const char *q = attr; *q != 0; q++) if (HasAttribute(p->sf,*q)) vv++;
+        if (inv) {
+            if (vv == 0) p->mode[0] = 1;
+        } else {
+            if (vv > 0) p->mode[0] = 1;
+        }
     }
 }
 
@@ -439,6 +530,14 @@ static void PrintTracks(void) {
 
 static int NoTrack(void) {
     return(tchain == NULL);
+}
+
+// True if no finite (non-looping) tracks remain.
+static int NoFiniteTracks(void) {
+    for (Track *p = tchain; p != NULL; p = p->next) {
+        if (! HasAttribute(p->sf,'l')) return 0;
+    }
+    return 1;
 }
 
 
@@ -502,12 +601,12 @@ static inline uint16_t FifoLevel(void) {
 static void StartBackgroundSound(void);
 //
 static int TryCloseTrack(Track *p) {
-    if (p->sf->attr[2] == 'i') {
+    if (HasAttribute(p->sf,'i')) {
         // try start another background sound
         // this will only be successful if the ID_IL_GROUP is not empty
         StartBackgroundSound();
     }
-    else if (p->sf->attr[0] == 'l') {
+    else if (HasAttribute(p->sf,'l')) {
         // file marked with attribute 'l' (loop)
         lseek(p->fh,p->stpos,SEEK_SET);
         p->rcnt = p->tcnt;
@@ -1048,6 +1147,12 @@ static Sfile *NewSound(char *fpath, uint16_t id, uint8_t a[], uint16_t vol) {
     strncpy(s->fpath,fpath,FPATHLEN);
     s->fpath[FPATHLEN] = 0;
     s->next = NULL;
+
+    // Per-class volume scaling (voice vs sound)
+    if (HasAttribute(s,'v')) s->vol = (s->vol * gconf[CONF_VOLV]) / 100;
+    else                     s->vol = (s->vol * gconf[CONF_VOLS]) / 100;
+    if (s->vol > 100) s->vol = 100;
+
     return s;
 }
 
@@ -1087,9 +1192,9 @@ static int16_t InsertEntry(char *fpath, char *fname) {
             s->next = schain;
             schain = s;
             // if file has an i or i&l attribute, add it to its special group
-            if (a[2] == 'i') {
-                if (a[0] == 'l') AddGroupMember(ID_IL_GROUP,id);
-                else AddGroupMember(ID_I_GROUP,id);
+            if (HasAttribute(s,'i')) {
+                if (HasAttribute(s,'l')) AddGroupMember(ID_IL_GROUP,id);
+                else                     AddGroupMember(ID_I_GROUP,id);
             }
             return s->id;
         }
@@ -1132,14 +1237,21 @@ static int16_t InsertEntry(char *fpath, char *fname) {
 }
 
 static void ReadCatalogFromSD() {
-    char fpath0[30];
-    sprintf(fpath0, "%s/",mount_point);
+    char fpath0[64];
+    snprintf(fpath0, sizeof(fpath0), "%s/%s/",mount_point,gconfsd);
     ESP_LOGI(LOG,"read catalog %s",fpath0);
     uint16_t ne = 0;
-    DIR *dp;
-    struct dirent *ep;
-    dp = opendir (fpath0);
+    DIR *dp = opendir(fpath0);
+    if (dp == NULL) {
+        // theme directory missing — try to create it then re-open.
+        char dpath[64];
+        snprintf(dpath, sizeof(dpath), "%s/%s",mount_point,gconfsd);
+        ESP_LOGW(LOG,"theme dir missing, creating %s",dpath);
+        mkdir(dpath, 0777);
+        dp = opendir(fpath0);
+    }
     if (dp != NULL) {
+        struct dirent *ep;
         while ((ep = readdir(dp)) != NULL) {
             if (InsertEntry(fpath0,ep->d_name) < 0) continue;
             ne++;
@@ -1148,7 +1260,22 @@ static void ReadCatalogFromSD() {
         ESP_LOGI(LOG,"read %u entries",ne);
     }
     else {
-        ESP_LOGI(LOG,"read failed %s",fpath0);
+        ESP_LOGE(LOG,"read failed %s",fpath0);
+    }
+}
+
+// Reset next-member pointer of every sound group.
+static void ResetGroups(void) {
+    for (Sgroup *p = gchain; p != NULL; p = p->next) p->nmp = 0;
+}
+
+// Advance next-member pointer of one specific group.
+static void IncNextMember(uint16_t gnum) {
+    for (Sgroup *p = gchain; p != NULL; p = p->next) {
+        if (p->id == gnum && p->nom > 0) {
+            p->nmp = (p->nmp + 1) % p->nom;
+            return;
+        }
     }
 }
 
@@ -1212,6 +1339,7 @@ static void StartInitSound() {
             char m[48];
             snprintf(m, sizeof(m), "InitSound => sfile %u", (unsigned)s->id);
             activity_log_add(m);
+            event_log_add(m);
         }
         }
 }
@@ -1227,12 +1355,16 @@ static void StartSound(uint16_t id) {
         snprintf(m, sizeof(m), "Start sound %u%s", (unsigned)id,
                  attract_playing_now ? " (attract)" : "");
         activity_log_add(m);
+        event_log_add(m);
     }
 
     // reset attract inactivity timer on regular (non-attract) playback
     if (!attract_playing_now && attract_group_id != 0) {
         attract_last_activity = xTaskGetTickCount();
-        attract_active = false;
+        if (attract_active) {
+            attract_active = false;
+            LedD2(false);
+        }
     }
 
     Sfile *s = LookupSound(id);
@@ -1250,20 +1382,26 @@ static void StartSound(uint16_t id) {
         activity_log_add(m);
     }
 
-    if (s->attr[3] == 'k') { // kill
+    // log=only suppresses audio playback but the activity entries above were emitted
+    if (gconf[CONF_LOG] == CONF_LOG_ONLY) return;
+
+    if (HasAttribute(s,'k')) {          // hard kill — stop everything, then play
         MarkTracksById(-1);
         NewTrack(s);
     }
-    else if (s->attr[3] == 'c') { // soft kill
-        MarkTracksById(-2);
+    else if (HasAttribute(s,'c')) {     // soft kill — spare init/background sounds
+        MarkTracksByAttr(1, "i");
         NewTrack(s);
     }
-    else if (s->attr[1] == 'b') { // break
+    else if (HasAttribute(s,'q')) {     // quit — spare looping and voice sounds
+        MarkTracksByAttr(1, "lv");
+        NewTrack(s);
+    }
+    else if (HasAttribute(s,'b')) {     // break — only this id
         MarkTracksById((int16_t)id);
         NewTrack(s);
     }
     else {
-//  NewTrack(s);
         CorrFifo(NewTrack(s));
     }
 }
@@ -1285,8 +1423,10 @@ static void PrintAllStruct(void);
 static void AttractTick(void) {
     TickType_t now = xTaskGetTickCount();
     if (!attract_active) {
+        LedD2(false);
         if ((uint32_t)(now - attract_last_activity) >= pdMS_TO_TICKS(attract_timeout_ms)) {
             attract_active = true;
+            LedD2(true);
             // trigger the first attract sound immediately
             attract_last_play = now - pdMS_TO_TICKS(attract_interval_ms);
             ets_printf("Attract mode ON (group %u)\n", attract_group_id);
@@ -1294,6 +1434,7 @@ static void AttractTick(void) {
                 char m[48];
                 snprintf(m, sizeof(m), "Attract mode ON (group %u)", (unsigned)attract_group_id);
                 activity_log_add(m);
+                event_log_add(m);
             }
         }
         return;
@@ -1311,11 +1452,21 @@ static void ExecCommand(Rxcmd *k) {
     case 'p': // play sound
         StartSound(k->arg);
         break;
-    case 's': // tbd, stop sound
+    case 'k': // kill all sounds
+        MarkTracksById(-1);
         break;
-    case 'q': // tbd, queue sound
+    case 't': // kill all sounds except voices, reset group next-member pointers
+        MarkTracksByAttr(1, "v");
+        ResetGroups();
         break;
-    case 'v': // tbd, set volume of sound
+    case 'n': // increment group next-member pointer
+        IncNextMember(k->arg);
+        break;
+    case 'w': // kill a specific sound id
+        MarkTracksById((int16_t)k->arg);
+        break;
+    case 'm': // kill all looping sounds
+        MarkTracksByAttr(0, "l");
         break;
     default:
         break;
@@ -1349,6 +1500,7 @@ void WAVPlayer(void *pvParameters) {
         StartSound(ID_VERSION);
     }
     
+    LedsInit();
     gchain = CreateSpecialGroups();
     ReadCatalogFromSD();
     {
@@ -1390,12 +1542,21 @@ void WAVPlayer(void *pvParameters) {
 
     // main loop
     Rxcmd xcmd;
+    bool led1_on = false;
     run = 1;
     while (run) {
         if (RunMixer()) DeleteTracks();
         if (FifoFull()) vTaskDelay(1);
         if (xStreamBufferReceive(xpinevt,&xcmd,sizeof(Rxcmd),0) == sizeof(Rxcmd)) ExecCommand(&xcmd);
         if (attract_group_id != 0) AttractTick();
+
+        // D1: ON while at least one track is playing.  Edge-triggered to avoid
+        // hammering gpio_set_level on every iteration.
+        bool playing = (tchain != NULL);
+        if (playing != led1_on) {
+            led1_on = playing;
+            LedD1(playing);
+        }
         
 #if 0
         if (stac.mixxcnt == 200000) StartSound(1);

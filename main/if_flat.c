@@ -25,6 +25,7 @@
 #include "pgpio.h"
 #include "pwav.h"
 
+#ifdef ESP32_WROVER
 
 #define ESP_INTR_FLAG_DEFAULT 0
 
@@ -35,6 +36,7 @@
 //
 
 extern StreamBufferHandle_t xpinevt;
+extern uint16_t gconf[CONF_MAX];
 
 typedef struct {
     gpio_num_t pin;   // to the input number corresponding GPIO number
@@ -96,10 +98,10 @@ static void IsrFlat0(void* arg) {
 
 }
 
-void PinEvents0(void *pvParameters) {
+void FlatIf0(void *pvParameters) {
 
     // set debounce value (same value for all pins)
-    for (uint16_t i = 1; i <= MAXPINS; i++) spl[i].debce = *((uint16_t *)pvParameters);
+    for (uint16_t i = 1; i <= MAXPINS; i++) spl[i].debce = gconf[CONF_DEB];
 
     gpio_config_t io_conf = {0};
     io_conf.intr_type = GPIO_INTR_ANYEDGE;
@@ -182,14 +184,13 @@ static void IsrFlat(void* arg) {
 
 }
 
-void PinEvents(void *pvParameters) {
+void FlatIf(void *pvParameters) {
 
-    // set debounce value
-    // set rest period
+    // set debounce value and rest period from gconf[]
     for (uint16_t i = 1; i <= MAXPINS; i++) {
-        spl[i].debce = pdMS_TO_TICKS(((uint16_t *)pvParameters)[0]);
-        spl[i].restpd = pdMS_TO_TICKS(((uint16_t *)pvParameters)[1]);
-        }
+        spl[i].debce  = pdMS_TO_TICKS(gconf[CONF_DEB]);
+        spl[i].restpd = pdMS_TO_TICKS(gconf[CONF_RESTPD]);
+    }
 
     gpio_config_t io_conf = {0};
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
@@ -234,3 +235,8 @@ void PinEvents(void *pvParameters) {
     }
 }
 
+
+#else // !ESP32_WROVER — stubs so linker is satisfied on other targets
+void FlatIf(void *pvParameters)  { while (1) vTaskDelay(100); }
+void FlatIf0(void *pvParameters) { while (1) vTaskDelay(100); }
+#endif // ESP32_WROVER
