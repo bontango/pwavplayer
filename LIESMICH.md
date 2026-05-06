@@ -11,7 +11,7 @@ Ein polyphoner WAV-Player für ESP32-Mikrocontroller, entwickelt für den Einsat
 - **Polyphonie**: Mehrere WAV-Dateien werden gleichzeitig abgespielt und in Echtzeit gemischt.
 - **SD-Karte**: WAV-Dateien und Konfiguration werden von einer FAT-formatierten SD-Karte gelesen.
 - **GPIO-Events**: Bis zu 10 Eingangspins lösen Soundwiedergaben aus (direkt oder binär-codiert für Williams System 11 / Gottlieb System 1/80/80A/80B).
-- **Serielle Steuerung**: Sounds können über UART oder I2C (Slave) ausgelöst werden.
+- **Serielle Steuerung**: Sounds können über UART ausgelöst werden (RX auf GPIO 36, nur Empfang).
 - **USB Config Editor**: Browser-basierter Editor (`webapp/`) zur Verwaltung der SD-Karte und Konfiguration über USB (Chrome/Edge).
 - **WLAN/HTTP-Zugang (optional)**: Derselbe Editor kann das Gerät zusätzlich über WLAN ansprechen (HTTP-REST auf Port 8080), parallel zu USB. Nur STA-Modus, Zugangsdaten liegen in `config.txt`.
 - **Dateiattribute**: Einzelne WAV-Dateien können als Loop, Hintergrundsound, Init-Sound oder mit Kill-Verhalten konfiguriert werden.
@@ -33,8 +33,7 @@ Die Datei `config.txt` muss im Wurzelverzeichnis der SD-Karte liegen. Jede Zeile
 | `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80`, `by35` | `bg80` | GPIO-Eventmodus |
 | `deb` | Zahl (ms) | `10` | Entprellzeit in Millisekunden |
 | `rpd` | Zahl (ms) | `60` | Ruheperiode in Millisekunden (nur `flat`) |
-| `ser` | `none`, `uart`, `i2c` | `none` | Serielle Schnittstelle für Sound-Kommandos |
-| `addr` | Hex-Zahl | `0x66` | I2C-Slave-Adresse (nur wenn `ser=i2c`) |
+| `ser` | `none`, `uart` | `none` | Serielle Schnittstelle für Sound-Kommandos |
 | `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baudrate des USB-Config-Editor-Ports (UART0) |
 | `stheme` | String | `orgsnd` | Aktives Sound-Theme-Verzeichnis unterhalb der SD-Wurzel (Sounds und Gruppen werden von dort geladen) |
 | `log` | `no`, `yes`, `only` | `no` | Persistentes Eventlog auf SD (`log.txt`); `only` schreibt das Log, unterdrückt aber die Audiowiedergabe |
@@ -96,22 +95,12 @@ Bei `flat` / `flat0`: Pin 1–10 lösen Sound-ID 1–10 aus. Eingänge sind Acti
 
 ### Serielle Schnittstelle (`ser`)
 
-UART und I2C verwenden dieselben GPIO-Pins und schließen sich gegenseitig aus.
-
 #### UART (`ser=uart`)
+- RX auf **GPIO 36** (nur Eingang; kein interner Pull-up — bei Bedarf externen 10 kΩ Pull-up nach 3,3 V verwenden)
+- TX wird nicht genutzt
 - 115200 Baud, 8N1, kein Handshake
-- Befehl zum Abspielen: `p <id>` gefolgt von Zeilenende
-  Beispiel: `p 19` spielt Sound-Datei 19 ab
-
-#### I2C Slave (`ser=i2c`)
-- Adresse konfigurierbar über `addr=` (Standard: `0x66`)
-- 7-Bit-Adressierung
-
-| Befehl (Byte 0) | Byte 1 | Funktion |
-|-----------------|--------|----------|
-| `2` | – | Echo: Antwortet mit empfangenem Datensatz |
-| `3` | – | Gibt Board-ID und Firmware-Version zurück (7 Bytes) |
-| `20` | Sound-ID | Spielt Sound mit angegebener ID ab |
+- Befehl zum Abspielen: `p <id>` gefolgt von Zeilenende — Beispiel: `p 19` spielt Sound-Datei 19 ab
+- GPIO 21 und 22 bleiben unabhängig von dieser Einstellung dauerhaft für die on-board LEDs verfügbar
 
 ---
 

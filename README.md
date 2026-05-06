@@ -11,7 +11,7 @@ A polyphonic WAV file player for ESP32 microcontrollers, designed for use in pin
 - **Polyphony**: Multiple WAV files are played simultaneously and mixed in real time.
 - **SD card**: WAV files and configuration are read from a FAT-formatted SD card.
 - **GPIO events**: Up to 10 input pins trigger sound playback (directly or binary-encoded for Williams System 11 / Gottlieb System 1/80/80A/80B).
-- **Serial control**: Sounds can be triggered via UART or I2C (slave).
+- **Serial control**: Sounds can be triggered via UART (RX on GPIO 36, RX-only).
 - **USB Config Editor**: Browser-based editor (`webapp/`) for managing the SD card and configuration over USB (Chrome/Edge).
 - **WiFi / HTTP access (optional)**: The same editor can also talk to the device over WiFi (HTTP REST on port 8080), in parallel to USB. STA-mode only, credentials in `config.txt`.
 - **File attributes**: Individual WAV files can be configured as loop, background sound, init sound, or with kill behavior.
@@ -33,8 +33,7 @@ The file `config.txt` must be placed in the root directory of the SD card. Each 
 | `evt` | `none`, `flat`, `flat0`, `bw11`, `bg80`, `by35` | `bg80` | GPIO event mode |
 | `deb` | number (ms) | `10` | Debounce time in milliseconds |
 | `rpd` | number (ms) | `60` | Rest period in milliseconds (`flat` mode only) |
-| `ser` | `none`, `uart`, `i2c` | `none` | Serial interface for sound commands |
-| `addr` | hex value | `0x66` | I2C slave address (only when `ser=i2c`) |
+| `ser` | `none`, `uart` | `none` | Serial interface for sound commands |
 | `usbbaud` | `115200`, `230400`, `460800`, `921600` | `115200` | Baud rate of the USB config-editor port (UART0) |
 | `stheme` | string | `orgsnd` | Active sound-theme directory under the SD root (sounds and groups are loaded from there) |
 | `log` | `no`, `yes`, `only` | `no` | Persistent event log on SD (`log.txt`); `only` writes the log but suppresses audio playback |
@@ -96,22 +95,12 @@ For `flat` / `flat0`: pins 1–10 trigger sound IDs 1–10. Inputs are active-lo
 
 ### Serial interface (`ser`)
 
-UART and I2C share the same GPIO pins and are mutually exclusive.
-
 #### UART (`ser=uart`)
+- RX on **GPIO 36** (input-only pad; no internal pull-up — use an external 10 kΩ pull-up to 3.3 V if needed)
+- TX not used
 - 115200 baud, 8N1, no handshake
-- Playback command: `p <id>` followed by a newline
-  Example: `p 19` plays sound file 19
-
-#### I2C Slave (`ser=i2c`)
-- Address configurable via `addr=` (default: `0x66`)
-- 7-bit addressing
-
-| Command (byte 0) | Byte 1 | Function |
-|------------------|--------|----------|
-| `2` | – | Echo: replies with the received data |
-| `3` | – | Returns board ID and firmware version (7 bytes) |
-| `20` | Sound ID | Plays the sound with the given ID |
+- Playback command: `p <id>` followed by a newline — example: `p 19` plays sound file 19
+- GPIOs 21 and 22 remain available for the on-board LEDs regardless of this setting
 
 ---
 

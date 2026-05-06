@@ -142,7 +142,7 @@
 <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-dark bg-dark px-3 py-2">
   <span class="navbar-brand fw-bold">&#9835; PWAVplayer Config Editor
-    <small class="text-secondary fw-normal">v1.07</small>
+    <small class="text-secondary fw-normal">v1.08</small>
   </span>
   <span id="currentFileName" class="text-secondary text-truncate mx-auto"
         style="max-width:38%; font-size:0.85rem;" title="">&#8212; no file open &#8212;</span>
@@ -383,22 +383,11 @@
           <div class="mb-3 row">
             <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">ser</label>
             <div class="col-sm-8">
-              <select class="form-select form-select-sm" id="cfg-ser" onchange="onSerChange()">
+              <select class="form-select form-select-sm" id="cfg-ser">
                 <option value="none" selected>none — Disabled</option>
                 <option value="uart">uart — UART serial commands</option>
-                <option value="i2c">i2c — I2C slave interface</option>
               </select>
               <div class="form-text">Serial command interface type</div>
-            </div>
-          </div>
-
-          <!-- addr (only when ser=i2c) -->
-          <div class="mb-3 row field-hidden" id="row-addr">
-            <label class="col-sm-4 col-form-label col-form-label-sm fw-bold font-monospace">addr</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control form-control-sm" id="cfg-addr"
-                     value="0x66" placeholder="0x66" style="max-width:120px;">
-              <div class="form-text">I2C slave address (hex), e.g. 0x08</div>
             </div>
           </div>
 
@@ -2872,8 +2861,7 @@ function parseConfig(text) {
   if (v.evt  !== undefined) setSelectVal('cfg-evt',  v.evt);
   if (v.deb  !== undefined) document.getElementById('cfg-deb').value  = v.deb;
   if (v.rpd  !== undefined) document.getElementById('cfg-rpd').value  = v.rpd;
-  if (v.ser  !== undefined) { setSelectVal('cfg-ser', v.ser); onSerChange(); }
-  if (v.addr !== undefined) document.getElementById('cfg-addr').value = v.addr;
+  if (v.ser  !== undefined) setSelectVal('cfg-ser', v.ser);
   if (v.usbbaud !== undefined) setSelectVal('cfg-usbbaud', v.usbbaud);
   const sth = document.getElementById('cfg-stheme');
   if (sth && v.stheme !== undefined) sth.value = v.stheme.replace(/^"(.*)"$/, '$1');
@@ -2898,14 +2886,12 @@ function generateConfig() {
   const deb  = document.getElementById('cfg-deb').value;
   const rpd  = document.getElementById('cfg-rpd').value;
   const ser  = document.getElementById('cfg-ser').value;
-  const addr = document.getElementById('cfg-addr').value;
   const usbbaud = document.getElementById('cfg-usbbaud').value;
   const stheme = (document.getElementById('cfg-stheme').value || 'orgsnd').trim();
   const volv = document.getElementById('cfg-volv').value || '100';
   const vols = document.getElementById('cfg-vols').value || '100';
   const log  = document.getElementById('cfg-log').value || 'no';
   let s = `dac=${dac}\nmix=${mix}\nevt=${evt}\ndeb=${deb}\nrpd=${rpd}\nser=${ser}\n`;
-  if (ser === 'i2c') s += `addr=${addr}\n`;
   s += `stheme=${stheme}\n`;
   s += `volv=${volv}\nvols=${vols}\nlog=${log}\n`;
   s += `usbbaud=${usbbaud}\n`;
@@ -2924,12 +2910,6 @@ function setSelectVal(id, val) {
   for (const opt of el.options) { if (opt.value === val) { el.value = val; return; } }
 }
 
-function onSerChange() {
-  const row = document.getElementById('row-addr');
-  document.getElementById('cfg-ser').value === 'i2c'
-    ? row.classList.remove('field-hidden')
-    : row.classList.add('field-hidden');
-}
 
 // ─── Navbar file operations ───────────────────────────────────────────────────
 
@@ -2944,8 +2924,7 @@ function applyDefaults() {
   setSelectVal('cfg-evt', d.evt);
   document.getElementById('cfg-deb').value  = d.deb;
   document.getElementById('cfg-rpd').value  = d.rpd;
-  setSelectVal('cfg-ser', d.ser); onSerChange();
-  document.getElementById('cfg-addr').value = d.addr;
+  setSelectVal('cfg-ser', d.ser);
   setSelectVal('cfg-usbbaud', d.usbbaud);
   document.getElementById('cfg-stheme').value = d.stheme;
   document.getElementById('cfg-volv').value   = d.volv;

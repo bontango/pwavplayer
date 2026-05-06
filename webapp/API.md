@@ -319,7 +319,7 @@ converter. See `usbserial.c` (`USB_UART_PORT`, `gusbbaud`).
 ### Enabling the API
 
 The `UsbSerial` task is started unconditionally from `main/main.c` alongside the other
-tasks, regardless of the `ser=` setting in `config.txt`.
+tasks, independent of the `ser=` setting in `config.txt` (which controls only `main/serial.c`).
 
 ---
 

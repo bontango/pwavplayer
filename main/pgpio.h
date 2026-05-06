@@ -20,9 +20,9 @@
 #define DAC_CS   GPIO_NUM_5
 #define RX_SDA   GPIO_NUM_21
 #define TX_SCL   GPIO_NUM_22
+#define UART_RX_PIN GPIO_NUM_36  // input-only pad, no internal pull-up
 
 // On-board indicator LEDs (active LOW — driven against GND).
-// Share pins with RX_SDA/TX_SCL — only used when ser=none.
 #define LED_D1   GPIO_NUM_21    // ON while at least one track is playing
 #define LED_D2   GPIO_NUM_22    // ON while attract mode is active
 

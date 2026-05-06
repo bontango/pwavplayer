@@ -54,7 +54,6 @@ extern void CheckFWUpdate(char *fname);
 extern void WAVPlayer(void *pvParameters);
 extern void WAVDummy(void *pvParameters);
 extern void SerialUART(void *pvParameters);
-extern void SerialI2C(void *pvParameters);
 extern void UsbSerial(void *pvParameters);
 extern void FlatIf(void *pvParameters);
 extern void FlatIf0(void *pvParameters);
@@ -94,14 +93,8 @@ void app_main(void) {
     // Config-editor USB serial (UART0) always available, independent of ser= setting
     xTaskCreatePinnedToCore(&UsbSerial, "UsbSerial", 8192, NULL, (tskIDLE_PRIORITY + 2), NULL, CORE_1);
 
-    switch (gconf[CONF_SER]) {
-    case CONF_SER_UART:
+    if (gconf[CONF_SER] == CONF_SER_UART) {
         xTaskCreatePinnedToCore(&SerialUART, "SerialUART", 4096, NULL, (tskIDLE_PRIORITY + 2), NULL, CORE_1);
-        break;
-    case CONF_SER_I2C:
-        xTaskCreatePinnedToCore(&SerialI2C, "SerialI2C", 4096, NULL, (tskIDLE_PRIORITY + 2), NULL, CORE_1);
-        break;
-    default: break;
     }
 
     switch(gconf[CONF_EVT]) {
