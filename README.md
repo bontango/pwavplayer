@@ -97,10 +97,10 @@ For `flat` / `flat0`: pins 1–10 trigger sound IDs 1–10. Inputs are active-lo
 
 #### UART (`ser=uart`)
 - RX on **GPIO 36** (input-only pad; no internal pull-up — use an external 10 kΩ pull-up to 3.3 V if needed)
-- TX not used
+- TX on **GPIO 22** — received command is echoed back
 - 115200 baud, 8N1, no handshake
 - Playback command: `p <id>` followed by a newline — example: `p 19` plays sound file 19
-- GPIOs 21 and 22 remain available for the on-board LEDs regardless of this setting
+- GPIO 21 remains available for the on-board LED D1; GPIO 22 is used by UART TX when `ser=uart`
 
 ---
 

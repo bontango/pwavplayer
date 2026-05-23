@@ -51,7 +51,7 @@
 #include "pwav.h"
 
 // Version
-#define VERSION "1.0.8"
+#define VERSION "1.0.9"
 char *gversion = VERSION;
 
 // ---------------------------------------------------------------------------
@@ -419,26 +419,23 @@ static int StripWavHeader(int fh, uint32_t *len, uint32_t *stpos) {
 
 static Track *tchain = NULL;
 
-// On-board LED helpers — active LOW (pin LOW = LED ON).
-// Only configured on WROVER and only when ser=none, since LED_D1/D2 share pins
-// with the optional UART/I2C interface.
+// On-board LED D1 (GPIO 21) — active LOW (pin LOW = LED ON).
+// Only configured on WROVER and only when ser=none, since GPIO 22 is UART TX.
 static bool g_leds_active = false;
 static inline void LedD1(bool on) { if (g_leds_active) gpio_set_level(LED_D1, on ? 0 : 1); }
-static inline void LedD2(bool on) { if (g_leds_active) gpio_set_level(LED_D2, on ? 0 : 1); }
 
 static void LedsInit(void) {
 #ifdef ESP32_WROVER
-    if (gconf[CONF_SER] != CONF_SER_NONE) return;  // pins owned by UART/I2C
+    if (gconf[CONF_SER] != CONF_SER_NONE) return;  // GPIO 22 owned by UART TX
     gpio_config_t io = {0};
     io.intr_type = GPIO_INTR_DISABLE;
     io.mode = GPIO_MODE_OUTPUT;
-    io.pin_bit_mask = (1ULL << LED_D1) | (1ULL << LED_D2);
+    io.pin_bit_mask = (1ULL << LED_D1);
     io.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io.pull_up_en = GPIO_PULLUP_DISABLE;
     if (gpio_config(&io) == ESP_OK) {
         g_leds_active = true;
         gpio_set_level(LED_D1, 1);  // off
-        gpio_set_level(LED_D2, 1);  // off
     }
 #endif
 }
@@ -1363,7 +1360,6 @@ static void StartSound(uint16_t id) {
         attract_last_activity = xTaskGetTickCount();
         if (attract_active) {
             attract_active = false;
-            LedD2(false);
         }
     }
 
@@ -1423,10 +1419,8 @@ static void PrintAllStruct(void);
 static void AttractTick(void) {
     TickType_t now = xTaskGetTickCount();
     if (!attract_active) {
-        LedD2(false);
         if ((uint32_t)(now - attract_last_activity) >= pdMS_TO_TICKS(attract_timeout_ms)) {
             attract_active = true;
-            LedD2(true);
             // trigger the first attract sound immediately
             attract_last_play = now - pdMS_TO_TICKS(attract_interval_ms);
             ets_printf("Attract mode ON (group %u)\n", attract_group_id);

@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------------------------
 //
-// Run UART/COM serial interface (RX only, GPIO 36)
+// Run UART/COM serial interface (RX GPIO 36, TX GPIO 22)
 //
 
 
@@ -64,8 +64,8 @@ void SerialUART(void *pvParameters) {
     };
 
     ESP_ERROR_CHECK(uart_param_config(UART_PORT_NUM, &uart_config));
-    ESP_ERROR_CHECK(uart_set_pin(UART_PORT_NUM, UART_PIN_NO_CHANGE, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-    ESP_ERROR_CHECK(uart_driver_install(UART_PORT_NUM, BUFSIZE, 0, 20, &uart_event_queue, 0));
+    ESP_ERROR_CHECK(uart_set_pin(UART_PORT_NUM, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(uart_driver_install(UART_PORT_NUM, BUFSIZE, BUFSIZE, 20, &uart_event_queue, 0));
     
     while (1) {
         if (xQueueReceive(uart_event_queue,(void *)&event,(TickType_t)portMAX_DELAY)) {
@@ -75,6 +75,7 @@ void SerialUART(void *pvParameters) {
                 dtmp[event.size] = 0;
 //                ESP_LOGI(LOG, "[UART EVT]: %s",(char*)dtmp);
                 CmdDispatch(dtmp);
+                uart_write_bytes(UART_PORT_NUM, (const char*)dtmp, event.size);
             }
         }
     }

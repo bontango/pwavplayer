@@ -318,6 +318,32 @@ below lists the keys; defaults match the firmware’s
 <td>UART0 baud used by <strong>this</strong> editor</td>
 </tr>
 <tr>
+<td><code>stheme</code></td>
+<td>string</td>
+<td><code>orgsnd</code></td>
+<td>Active sound-theme directory under SD root</td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td><code>no</code>, <code>yes</code>, <code>only</code></td>
+<td><code>no</code></td>
+<td>Persistent event log on SD (<code>log.txt</code>); <code>only</code>
+writes the log but suppresses audio</td>
+</tr>
+<tr>
+<td><code>volv</code></td>
+<td>0–100</td>
+<td><code>100</code></td>
+<td>Voice-class volume scaling % (files with attribute
+<code>v</code>)</td>
+</tr>
+<tr>
+<td><code>vols</code></td>
+<td>0–100</td>
+<td><code>100</code></td>
+<td>Sound-class volume scaling % (non-voice files)</td>
+</tr>
+<tr>
 <td><code>wifi_enable</code></td>
 <td><code>yes</code>, <code>no</code></td>
 <td><code>no</code></td>
@@ -353,9 +379,14 @@ click <em>Connect USB</em> again, set the <strong>Baud</strong>
 drop-down on the Device tab to the same value.</p>
 </blockquote>
 <h3 id="3-soundfiles">3. Soundfiles</h3>
-<p>Manage the sound-file slots (IDs 0001–0031). The editor parses the
+<p>Manage the sound-file slots (IDs 0001–0031) in the active sound theme
+(<code>stheme</code>). The editor parses the
 <code>NNNN-AAAA-VVV-description.wav</code> naming scheme and displays
-attributes (loop, break, init/background, kill) in a table.</p>
+attributes as a row of seven checkboxes (Loop, Break, Init/bg, Voice,
+Kill, Soft-kill, Quit) in the Attributes column. Attributes are
+position-independent, with
+<code>Kill</code>/<code>Soft-kill</code>/<code>Quit</code> mutually
+exclusive and a maximum of four attributes per file.</p>
 <ul>
 <li><strong>Refresh</strong> — re-reads the SD file list.</li>
 <li><strong>Write Soundconfig</strong> — renames files on the device so
@@ -403,9 +434,9 @@ instant.</li>
 a file with the target name already exists, you are asked whether to
 overwrite it.</li>
 </ol>
-<p>Finally, adjust attributes (loop / break / init / background / kill /
-volume) in the table and click <strong>Write Soundconfig</strong> to
-rename the files accordingly.</p>
+<p>Finally, adjust attributes (loop / break / init / voice / kill /
+soft-kill / quit / volume) in the table and click <strong>Write
+Soundconfig</strong> to rename the files accordingly.</p>
 <blockquote>
 <p>Tip: the description part of the filename is sanitized — only
 letters, digits and dashes are kept. Special characters and spaces are
@@ -449,15 +480,22 @@ removes it locally.</li>
 all state lives in the filename — changing members, mode, ID, or
 description translates to a rename on <strong>Write Groups</strong>.</p>
 <h3 id="5-sd-card">5. SD Card</h3>
-<p>Generic file manager for the SD card root.</p>
+<p>Generic file manager for the SD card root <strong>and</strong> the
+active sound-theme directory.</p>
 <ul>
-<li><strong>File list</strong> — name, size, modification time. The
-modification time is only meaningful if the device clock was set (the
-editor sends <code>SET:TIME=</code> automatically right after the
-handshake).</li>
+<li><strong>File list</strong> — Dir, name, size, modification time.
+Files in the SD root show an empty Dir; files inside the active theme
+directory show the theme name. Theme entries are sorted under their
+directory. The modification time is only meaningful if the device clock
+was set (the editor sends <code>SET:TIME=</code> automatically right
+after the handshake). Sizes/timestamps may be <code>0</code> for theme
+entries because the firmware skips <code>stat()</code> on the
+(potentially large) theme directory.</li>
 <li><strong>Upload / Download / Rename / Delete</strong> — standard
 operations, streamed over the serial protocol described in
-<code>API.md</code>.</li>
+<code>API.md</code>. File ops accept either a plain filename (root) or
+<code>&lt;theme&gt;/&lt;file&gt;</code> (one level into the theme
+directory).</li>
 <li><strong>Init SD Card</strong> — downloads a reference SD layout from
 <code>lisy.dev</code> and uploads it to the device. Useful for a fresh
 card. The <em>Overwrite existing</em> checkbox controls whether existing
